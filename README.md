@@ -2,8 +2,9 @@
 
 把独立的 **Pocket · H5 预览工作台**（上游 Electron / 浏览器版）复用为 DeepSeek Harness Web UI 里的一个
 插件面板：左侧栏「Pocket H5」入口 + 主面板里的整套工作台（iPhone 17 尺寸、状态栏/灵动岛/安全区、
-横竖屏、画布缩放与真机物理尺寸校准），并补了一个上游没有的**手机扫码**入口——把当前预览地址
-生成二维码，真机扫一下就能打开。
+横竖屏、画布缩放与真机物理尺寸校准），并补了两个上游没有的入口：**手机扫码**（把当前预览地址
+生成二维码，真机扫一下就能打开）和**预览诊断**（页面打不开时，直接告诉你「站点禁止被嵌入」还是
+「被跳转到登录页」，以及登录态为什么不能照搬系统浏览器）。
 
 - 上游来源与版本：`ui/PROVENANCE.md`（`index.html` 144 行 / `styles.css` 1000 行 / `app.js` 323 行 / `demo.html` 原样快照）
 - 复用与宿主适配说明：`docs/adaptation.md`
@@ -20,12 +21,13 @@ dsh-pocket-h5/
 ├── build-client.mjs      # 构建器：把 ui/ 快照机械适配成 client.js
 ├── src/client/panel.js   # 面板外壳：Shadow DOM 挂载 + 槽位注册 + 侧栏图标 + Host 显示器尺寸回填
 ├── src/client/qr.js      # 新增能力：地址栏二维码按钮 + 手机扫码对话框
+├── src/client/diagnose.js # 新增能力：「诊断」按钮 + 嵌入/登录原因诊断对话框
 ├── ui/                   # 上游原样快照（复用源，不手改）
 ├── vendor/qrcode/        # 离线二维码编码器（node-qrcode 1.5.4 内核，MIT；PROVENANCE.md + LICENSE）
 ├── locale/{zh,en}.json   # 插件管理页显示的名称与描述
 ├── icon.svg              # 插件图标（复用上游手机图形）
-├── tests/host-smoke.mjs  # Host 路由冒烟测试（13 项）
-├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（48 项：factory/槽位/二维码/尺寸匹配）
+├── tests/host-smoke.mjs  # Host 路由冒烟测试（21 项：demo/display/probe + 方法/HEAD/穿越边界）
+├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（62 项：factory/槽位/二维码/尺寸匹配/诊断摘要）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
 
@@ -37,6 +39,9 @@ dsh-pocket-h5/
 - **预览**：仍是 `<iframe id="previewFrame">`，输入端口 / `localhost:3000/path` / 完整 HTTP(S) 地址即可。
 - **内置示例**：`ui/demo.html` 由 Host 半通过同源路由 `/pocket-h5/demo.html` 提供。
 - **持久化**：外观、最近地址、显示器校准仍写在 `localStorage('pocket-h5-v1')`（宿主同源）。
+- **预览诊断（新增）**：预览地址旁的「诊断」按钮。Host 半请求目标地址（只读响应头、不跟随无限跳转、
+  6 秒超时），面板直接给出结论：`X-Frame-Options` / CSP `frame-ancestors` 是否禁止嵌入、是否被重定向到
+  登录页（或 401/403）、服务是否根本访问不到，并给出下一步建议。
 - **手机扫码（新增）**：地址栏右侧「二维码」按钮。二维码在本地生成（不联网、不把地址发给任何服务），
   地址若是 `127.0.0.1` / `localhost` 会提示改成电脑的局域网 IP；H5 开发服务需监听 `0.0.0.0`/局域网地址。
 - **真机尺寸（新增，Host 适配）**：上游 Electron 版用原生辅助程序读显示器毫米尺寸，浏览器页面读不到。
@@ -69,8 +74,8 @@ node build-client.mjs
 验证命令：
 
 ```sh
-node tests/host-smoke.mjs     # 13 项：demo/display 路由、方法、HEAD、穿越与编码边界
-node tests/client-smoke.mjs   # 48 项：loader/factory、两处槽位、二维码内核与 vendor 逐位一致、显示器匹配
+node tests/host-smoke.mjs     # 21 项：demo/display/probe 路由、方法、HEAD、穿越与编码边界、登录/嵌入判定
+node tests/client-smoke.mjs   # 62 项：loader/factory、两处槽位、二维码内核与 vendor 逐位一致、显示器匹配、诊断摘要
 ```
 
 ## 安装 / 打开
@@ -92,6 +97,19 @@ node build-client.mjs      # 重新生成 client.js
 需要重启 DSH 进程——运行中的 Host 不会热重载，`plugin_manager` 会返回 `restart-required`）。
 
 打开方式：左侧栏点击 **Pocket H5**；输入 H5 开发服务地址，点击「打开预览」。
+
+## 登录态与嵌入（为什么不直接继承系统浏览器登录态）
+
+- **预览用的是 DSH 应用自己的 Chromium 会话**（持久 Cookie 库在 `~/.dsh/electron-user-data/`）：
+  在预览里登录一次，之后（含重启 DSH）一般仍在。
+- **不能读取 Safari / Chrome 的登录态**：Cookie 属于各自应用、由系统钥匙串加密，插件/宿主没有合法的
+  跨应用读取入口；这是浏览器安全边界，本插件也不做。
+- **「在系统浏览器打开」**：地址栏右侧按钮实际由 DSH 桌面端 `shell.openExternal` 交给系统默认浏览器，
+  用的是系统浏览器的登录态——但页面不在手机框里，只用于验证站点/完成登录。
+- **上游 Electron 版 vs 面板**：上游能创建同会话子窗口处理弹窗登录并把 Cookie 回传给预览；DSH 桌面端
+  会把 `window.open` 交给系统浏览器，因此「弹窗式登录 / 第三方 SSO」在预览里无法完成。需要这类登录时，
+  用系统浏览器或手机扫码；或者在 H5 开发侧放开 `frame-ancestors` 并改成不依赖弹窗的登录。
+- 不确定原因时，点面板里的「诊断」：它会区分「站点禁止嵌入」「被跳转到登录页」「服务访问不到」。
 
 ## 已知限制
 

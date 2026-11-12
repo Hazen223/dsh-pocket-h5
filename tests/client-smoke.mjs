@@ -179,7 +179,68 @@ if (typeof pickDisplay === 'function' && typeof cssPpi === 'function') {
   check(cssPpi({ pixelWidth: 0, widthMm: 300 }) === null, 'CSS ppi rejects invalid geometry')
 }
 
-/* ---- 6. generated assets are present and plausible ---- */
+/* ---- 6. embed/login diagnosis summary (pure) ---- */
+const summarize = qrTest.summarizeProbe
+check(typeof summarize === 'function', 'client exposes the diagnosis summarizer for smoke tests')
+
+if (typeof summarize === 'function') {
+  const blocked = summarize({
+    ok: true,
+    requestedUrl: 'http://127.0.0.1:5173/',
+    finalUrl: 'http://127.0.0.1:5173/',
+    status: 200,
+    redirects: [],
+    framing: { allowed: false, reason: 'X-Frame-Options: DENY' },
+    login: { detected: false, reason: '未检测到登录跳转' },
+  })
+  check(blocked.tone === 'error' && blocked.title.includes('禁止'), 'diagnosis: framing block is an error')
+  check(blocked.lines.some((line) => line.includes('X-Frame-Options')), 'diagnosis: framing reason is reported')
+
+  const loginGate = summarize({
+    ok: true,
+    requestedUrl: 'http://127.0.0.1:5173/',
+    finalUrl: 'http://127.0.0.1:5173/login',
+    status: 200,
+    redirects: [{ status: 302, from: 'http://127.0.0.1:5173/', to: 'http://127.0.0.1:5173/login' }],
+    framing: { allowed: true, reason: '未发现限制' },
+    login: { detected: true, reason: '跳转链里出现登录相关地址' },
+  })
+  check(loginGate.tone === 'warn' && loginGate.title.includes('登录'), 'diagnosis: login gate is a warning')
+  check(loginGate.lines.some((line) => line.includes('最终地址')), 'diagnosis: login redirect target is reported')
+  check(
+    loginGate.tips.some((tip) => tip.includes('在预览里直接登录')),
+    'diagnosis: login tips point at logging in inside the preview',
+  )
+
+  const both = summarize({
+    ok: true,
+    requestedUrl: 'http://x/',
+    finalUrl: 'http://x/login',
+    status: 200,
+    redirects: [],
+    framing: { allowed: false, reason: 'X-Frame-Options: SAMEORIGIN' },
+    login: { detected: true, reason: '跳转链里出现登录相关地址' },
+  })
+  check(both.tone === 'error' && both.title.includes('禁止'), 'diagnosis: framing block wins over login signal')
+
+  const fine = summarize({
+    ok: true,
+    requestedUrl: 'http://x/',
+    finalUrl: 'http://x/',
+    status: 200,
+    redirects: [],
+    framing: { allowed: true, reason: '未发现 X-Frame-Options / frame-ancestors 限制' },
+    login: { detected: false, reason: '未检测到登录跳转' },
+  })
+  check(fine.tone === 'ok', 'diagnosis: healthy page is ok')
+
+  const failed = summarize({ ok: false, code: 'fetch-failed', message: '无法从 DSH 宿主机访问该地址' })
+  check(failed.tone === 'error' && failed.lines[0].includes('无法'), 'diagnosis: unreachable host is an error')
+  const empty = summarize(null)
+  check(empty.tone === 'error' && empty.title.includes('没有完成'), 'diagnosis: missing payload is handled')
+}
+
+/* ---- 7. generated assets are present and plausible ---- */
 const source = await readFile(bundlePath, 'utf8')
 check(source.includes(':host {'), 'generated CSS carries the :host scope')
 check(source.includes('data-pocket-h5-style'), 'panel injects its own shadow-root style tag')
@@ -191,6 +252,10 @@ check(source.includes('QR_MODULE_FACTORIES'), 'vendored QR modules are bundled i
 check(source.includes('id="qrButton"') || source.includes("button.id = 'qrButton'"), 'QR button is created in the panel')
 check(source.includes('cancelAnimationFrame(pocketAnimationFrame)'), 'dispose cancels the pending resize animation frame')
 check(source.includes('面板版不会修改系统或浏览器代理'), 'proxy hint matches the panel behaviour')
+check(source.includes('id = \'diagnoseButton\''), 'diagnosis button is created in the panel')
+check(source.includes('summarizeProbe'), 'diagnosis summarizer is bundled')
+check(source.includes('在系统浏览器打开 H5'), 'external-open button names the system browser')
+check(source.includes('需要登录的页面'), 'help dialog explains login and framing limits')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

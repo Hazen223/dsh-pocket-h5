@@ -6,6 +6,8 @@
  *
  * Run with: node tests/host-smoke.mjs
  */
+import { createServer } from 'node:http'
+
 import { apply } from '../index.js'
 
 const failures = []
@@ -170,6 +172,107 @@ if (typeof handler !== 'function') {
   check('POST /pocket-h5/display.json -> 405', () => {
     if (postDisplay.status !== 405) throw new Error(`status ${String(postDisplay.status)}`)
   })
+
+  // Embed/login diagnosis: local fixture server for the response policies.
+  const fixture = createServer((req, res) => {
+    if (req.url === '/plain') {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end('<!doctype html><title>ok</title>')
+    } else if (req.url === '/deny') {
+      res.writeHead(200, { 'Content-Type': 'text/html', 'X-Frame-Options': 'DENY' })
+      res.end('deny')
+    } else if (req.url === '/csp') {
+      res.writeHead(200, {
+        'Content-Type': 'text/html',
+        'Content-Security-Policy': "default-src 'self'; frame-ancestors 'none'",
+      })
+      res.end('csp')
+    } else if (req.url === '/protected') {
+      res.writeHead(302, { Location: '/login?next=%2F' })
+      res.end()
+    } else if (req.url === '/login') {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end('login')
+    } else if (req.url === '/unauthorized') {
+      res.writeHead(401, { 'Content-Type': 'text/html' })
+      res.end('no')
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/html' })
+      res.end('nope')
+    }
+  })
+  await new Promise((resolve) => fixture.listen(0, '127.0.0.1', resolve))
+  const fixturePort = fixture.address().port
+  const probe = async (path) => {
+    const target = `http://127.0.0.1:${fixturePort}${path}`
+    const res = await request(handler, 'GET', `/pocket-h5/probe.json?url=${encodeURIComponent(target)}`)
+    if (res.status !== 200) throw new Error(`probe endpoint status ${String(res.status)}`)
+    return JSON.parse(String(res.body ?? '{}'))
+  }
+
+  try {
+    const plain = await probe('/plain')
+    check('probe plain page -> framing allowed, no login', () => {
+      if (plain.ok !== true) throw new Error('not ok')
+      if (plain.framing?.allowed !== true) throw new Error(`framing ${JSON.stringify(plain.framing)}`)
+      if (plain.login?.detected !== false) throw new Error('unexpected login signal')
+      if (plain.status !== 200) throw new Error(`status ${String(plain.status)}`)
+    })
+
+    const deny = await probe('/deny')
+    check('probe X-Frame-Options DENY -> framing blocked', () => {
+      if (deny.framing?.allowed !== false) throw new Error('framing allowed')
+      if (!String(deny.framing?.reason ?? '').includes('DENY')) throw new Error('reason missing DENY')
+    })
+
+    const csp = await probe('/csp')
+    check("probe CSP frame-ancestors 'none' -> framing blocked", () => {
+      if (csp.framing?.allowed !== false) throw new Error('framing allowed')
+      if (!String(csp.framing?.reason ?? '').includes('frame-ancestors')) throw new Error('reason missing frame-ancestors')
+    })
+
+    const login = await probe('/protected')
+    check('probe login redirect -> login detected with redirect chain', () => {
+      if (login.login?.detected !== true) throw new Error('login not detected')
+      if (!Array.isArray(login.redirects) || login.redirects.length !== 1) throw new Error('redirect chain missing')
+      if (!String(login.finalUrl ?? '').includes('/login')) throw new Error(`finalUrl ${String(login.finalUrl)}`)
+    })
+
+    const unauthorized = await probe('/unauthorized')
+    check('probe HTTP 401 -> login detected', () => {
+      if (unauthorized.login?.detected !== true) throw new Error('401 not treated as login gate')
+    })
+
+    const notFound = await probe('/nope')
+    check('probe HTTP 404 -> ok payload with status', () => {
+      if (notFound.ok !== true) throw new Error('not ok')
+      if (notFound.status !== 404) throw new Error(`status ${String(notFound.status)}`)
+    })
+
+    const invalidScheme = await probe('/plain')
+    const badScheme = await request(handler, 'GET', `/pocket-h5/probe.json?url=${encodeURIComponent('file:///etc/passwd')}`)
+    const badSchemePayload = JSON.parse(String(badScheme.body ?? '{}'))
+    check('probe rejects non-http schemes', () => {
+      if (badSchemePayload.ok !== false) throw new Error('file: URL accepted')
+      if (badSchemePayload.code !== 'invalid-protocol') throw new Error(`code ${String(badSchemePayload.code)}`)
+      if (invalidScheme.ok !== true) throw new Error('fixture sanity failed')
+    })
+
+    const closedPort = await request(
+      handler,
+      'GET',
+      `/pocket-h5/probe.json?url=${encodeURIComponent('http://127.0.0.1:1/')}`,
+    )
+    const closedPayload = JSON.parse(String(closedPort.body ?? '{}'))
+    check('probe reports unreachable target', () => {
+      if (closedPayload.ok !== false) throw new Error('unreachable target reported ok')
+      if (closedPayload.code !== 'fetch-failed' && closedPayload.code !== 'timeout') {
+        throw new Error(`code ${String(closedPayload.code)}`)
+      }
+    })
+  } finally {
+    await new Promise((resolve) => fixture.close(resolve))
+  }
 }
 
 // Dispose the fake registration to exercise the returned disposer.

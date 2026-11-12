@@ -479,3 +479,75 @@ plugin_manager 的返回。）
 3. **二维码**：视觉显示与真实手机扫码互通仍未验证（阶段 3 遗留）。
 4. 未认证 curl 无法探测 `/plugins/*`（所有插件都 404），因此「GUI 是否已加载新 client bundle」
    也没有运行时证据；需要重启 + 刷新后人工确认。
+
+---
+
+## 13. 阶段 5（登录/嵌入诊断与入口措辞）
+
+> 时间：2026-11-12 20:29–20:45（Asia/Shanghai）。触发：用户反馈「有些页面需要登录才能用，
+> 内置浏览器能否调用目标机器浏览器或继承登录态？」
+
+### 13.1 结论（先回答问题）
+
+- **继承系统浏览器登录态：不可行**。Safari/Chrome 的 Cookie 属于各自应用、由系统钥匙串加密，
+  DSH 页面侧与 Host（Node）都没有合法读取入口；这属于浏览器安全边界，未实现、也不建议实现。
+- **调用系统浏览器：已有能力**。地址栏右侧按钮在 DSH 桌面端由 `shell.openExternal`
+  打开系统默认浏览器（`lib/main.js` 中 `openExternal` 白名单 http/https/mailto，
+  `setWindowOpenHandler` 统一转交），登录态在系统浏览器那边；但页面不在手机框里。
+- **内嵌预览的登录态属于 DSH 应用自己的持久 Chromium 会话**
+  （`~/.dsh/electron-user-data/` 下有持久 Cookie 库），在预览里登录一次后一般会保留；
+  失败通常是三种原因：站点禁止 iframe 嵌入、登录被重定向/401、弹窗式 OAuth 被系统浏览器接管
+  （上游 Electron 版能用同会话子窗口回传 Cookie，面板没有创建窗口的 API）。
+- 因此本轮交付的不是「继承」，而是**把原因诊断清楚 + 把已有入口命名准确**。
+
+### 13.2 实现
+
+- Host `index.js`：新增 `PROBE_PATH = '/pocket-h5/probe.json'`、`looksLikeLogin()`、
+  `assessFraming()`、`probeUrl()`。手动跟随 ≤5 次跳转、总超时 6s，只读响应头并 cancel 正文，
+  不发送 Cookie/凭据；返回 framing（X-Frame-Options / CSP frame-ancestors 判定）与
+  login（跳转链命中登录词或 401/403）。非法 scheme/URL → `{ok:false, code}`。
+- Client `src/client/diagnose.js`（factory 片段）：`summarizeProbe()` 纯函数把探测结果翻译成
+  「标题 + 事实 + 建议」；`mountDiagnoseFeature()` 在「示例」旁插入「诊断」按钮 + 对话框，
+  卸载时移除；样式只进面板 Shadow DOM。
+- 构建期（`build-client.mjs`）：上游「在新窗口打开 H5」→「在系统浏览器打开 H5（使用系统浏览器登录态）」
+  （title/aria-label 同步）；帮助弹窗插入「需要登录的页面」说明；`__test.summarizeProbe` 暴露给测试。
+- 文档：README 增加「登录态与嵌入」小节；`docs/adaptation.md` 增加 §7 映射行、§8 降级第 3 条、
+  §10 限制与 §13 完整说明。
+
+### 13.3 验证（可复现）
+
+```text
+node build-client.mjs          # 两次运行字节一致，client.js 168272 → 179319 B
+shasum -a 256 client.js        # 6ffa35eb63756c86a6267e9fb626122ac90329aee4af34f584cb6043abdcd125
+node --check client.js         # ok
+node --check index.js          # ok
+node tests/host-smoke.mjs      # 21/21 ok（新增 8 项 probe：plain/DENY/CSP none/登录跳转/401/404/非法 scheme/不可达）
+node tests/client-smoke.mjs    # 62/62 ok（新增 14 项：summarizeProbe 10 + 产物静态断言 4）
+```
+
+真实地址探测（假 ctx 直接调 handler，实际发起请求）：
+
+```text
+https://example.com/   => ok:true status:200 framing:true  login:false
+https://github.com/    => ok:true status:200 framing:false reason:X-Frame-Options: DENY
+http://127.0.0.1:1/    => ok:false code:fetch-failed message:无法从 DSH 宿主机访问该地址
+```
+
+### 13.4 重启证据（运行中的 Host 仍是旧模块）
+
+修改 `index.js` 后、重启前对当前 GUI（`http://127.0.0.1:49208`）做了只读探测：
+
+```text
+GET /pocket-h5/display.json  => 200   （阶段 4 的代码，已在上一轮重启后生效）
+GET /pocket-h5/probe.json    => 404   （阶段 5 新路由，运行中的 Host 未加载）
+```
+
+→ 与 `plugin_manager` 的 `restart-required / module-comparison` 一致：Host 模块不热重载，
+需要**完全退出并重开 DSH**；`client.js` 侧刷新 GUI 即可，但 Host 新路由必须重启。
+
+### 13.5 未验证项（阶段 5）
+
+1. 诊断对话框的实际渲染与交互（按钮位置、遮罩、关闭）——无浏览器控制，未做视觉验证。
+2. 重启后桌面 `dsh-app://app` 下 `fetch('/pocket-h5/probe.json')` 的真实链路与面板内结果渲染。
+3. 真实内网站点（X-Frame-Options / SSO 登录）的探测结果与用户侧观感。
+4. 手机扫码与「在系统浏览器打开」在桌面端的实际行为（上一轮遗留）。

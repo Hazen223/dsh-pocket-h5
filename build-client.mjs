@@ -120,6 +120,21 @@ function buildMarkup(html) {
   if (!body.includes(proxyHintBefore)) fail('代理提示文案（' + proxyHintBefore + '）未找到')
   body = body.split(proxyHintBefore).join(PANEL_PROXY_HINT)
 
+  // 「新窗口打开」在 DSH 桌面端实际由 shell.openExternal 交给系统默认浏览器，
+  // 用的是系统浏览器的登录态；把入口文案写准（title 与 aria-label 同文）。
+  const externalLabelBefore = '在新窗口打开 H5'
+  if (!body.includes(externalLabelBefore)) fail('「在新窗口打开 H5」按钮文案未找到')
+  body = body.split(externalLabelBefore).join('在系统浏览器打开 H5（使用系统浏览器登录态）')
+
+  // 帮助弹窗补一段「需要登录的页面」说明（登录态边界与替代路径）。
+  const helpFootnote = '<p class="help-footnote">'
+  if (!body.includes(helpFootnote)) fail('帮助弹窗的 help-footnote 锚点未找到')
+  body = body.replace(
+    helpFootnote,
+    '<div class="help-note"><h3>需要登录的页面</h3><p>预览使用 DSH 应用自己的浏览器会话：在预览里登录一次会保留，重启 DSH 后一般仍在。若页面禁止被嵌入（X-Frame-Options / CSP frame-ancestors）或登录需要弹窗，登录无法在预览内完成——可点地址栏旁的「在系统浏览器打开」使用系统浏览器的登录态，或用手机扫码。</p></div>' +
+      helpFootnote,
+  )
+
   // 上游代理分区第二条提示假设「应用内会改系统代理」，面板里不成立，换成真实行为。
   const proxyNoteBefore = '仅作用于 Pocket；本机地址直连。账号密码不保存到磁盘。'
   if (!body.includes(proxyNoteBefore)) fail('代理分区第二条提示未找到')
@@ -247,6 +262,7 @@ const cssSource = await read('ui/styles.css')
 const appSource = await read('ui/app.js')
 const panelSource = await read('src/client/panel.js')
 const qrSource = await read('src/client/qr.js')
+const diagnoseSource = await read('src/client/diagnose.js')
 
 const markup = buildMarkup(html)
 const css = buildCss(cssSource)
@@ -267,6 +283,11 @@ if (!panelSource.includes('CSS + QR_CSS')) fail('面板片段没有注入二维�
 if (!qrSource.includes('function mountQrFeature')) fail('qr.js 缺少 mountQrFeature')
 if (!qrSource.includes('createQrMatrix')) fail('qr.js 没有使用打包的二维码内核')
 if (!panelSource.includes('applyHostDisplayMetrics')) fail('面板片段没有接 Host 的显示器物理尺寸')
+if (!panelSource.includes('mountDiagnoseFeature(shadow)')) fail('面板片段没有挂载诊断入口')
+if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS')) fail('面板片段没有注入诊断样式')
+if (!diagnoseSource.includes('function summarizeProbe')) fail('diagnose.js 缺少 summarizeProbe')
+if (markup.includes('在新窗口打开 H5')) fail('「在新窗口打开」文案未替换')
+if (!markup.includes('需要登录的页面')) fail('帮助弹窗缺少登录说明')
 
 /* ------------------------------------------------------------------ *
  * 4. 内置二维码编码器：vendor/qrcode（node-qrcode 1.5.4 内核，MIT）
@@ -393,13 +414,15 @@ const bundle = [
   '',
   indent(qrSource, 4),
   '',
+  indent(diagnoseSource, 4),
+  '',
   indent(panelSource, 4),
   '',
   '    return {',
   '      inject: ["slots"],',
   '      apply: pocketApply,',
   '      // 离线冒烟测试入口（tests/client-smoke.mjs 使用；渲染不读取）。',
-  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch },',
+  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe },',
   '    };',
   '  },',
   '});',

@@ -27,6 +27,11 @@ const DEMO_PATHS = new Set([`${ROUTE_PATH}/demo.html`, `${ROUTE_PATH}/demo`])
 /** Host metrics endpoint: display physical size for true-size 100% preview. */
 const DISPLAY_PATH = `${ROUTE_PATH}/display.json`
 
+/** Embed diagnosis endpoint: why a preview URL cannot show (framing / login). */
+const PROBE_PATH = `${ROUTE_PATH}/probe.json`
+const PROBE_MAX_REDIRECTS = 5
+const PROBE_TIMEOUT_MS = 6000
+
 const runFile = promisify(execFile)
 
 /**
@@ -71,6 +76,143 @@ for index in range(count.value):
     })
 print(json.dumps(out))
 `
+
+/** A URL whose redirect/path looks like a login gate. */
+function looksLikeLogin(url) {
+  try {
+    const parsed = new URL(url)
+    const haystack = (parsed.pathname + parsed.search).toLowerCase()
+    return /(^|[/?&=._-])(login|signin|sign-in|sso|oauth|authorize|passport|cas|auth)([/?&=._-]|$)/.test(haystack)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Judge whether the target response forbids being framed by the panel.
+ *
+ * The panel page origin is `dsh-app://app` (browser surface: the loopback HTTP
+ * origin), so any http(s) target is cross-origin: `SAMEORIGIN`/`DENY` and a
+ * `frame-ancestors` list that does not include that origin all block embedding.
+ * Absence of a header does not guarantee rendering (JS bust-out still possible).
+ */
+function assessFraming(headers) {
+  const xFrameOptions = String(headers.get('x-frame-options') ?? '').toLowerCase()
+  const csp = String(headers.get('content-security-policy') ?? '')
+  const frameAncestorsRaw = (csp.match(/(?:^|;)\s*frame-ancestors\s+([^;]+)/i) ?? [])[1] ?? ''
+  const frameAncestors = frameAncestorsRaw.trim().toLowerCase()
+  if (xFrameOptions.includes('deny')) {
+    return { allowed: false, reason: 'X-Frame-Options: DENY', xFrameOptions, frameAncestors }
+  }
+  if (xFrameOptions.includes('sameorigin')) {
+    return { allowed: false, reason: 'X-Frame-Options: SAMEORIGIN（面板是 dsh-app://app，属于跨源）', xFrameOptions, frameAncestors }
+  }
+  if (frameAncestors !== '') {
+    if (frameAncestors.includes("'none'") || frameAncestors === 'none') {
+      return { allowed: false, reason: "CSP frame-ancestors 'none'", xFrameOptions, frameAncestors }
+    }
+    if (frameAncestors.includes('*') || frameAncestors.includes('dsh-app:')) {
+      return { allowed: true, reason: 'CSP frame-ancestors 允许 dsh-app://app', xFrameOptions, frameAncestors }
+    }
+    return {
+      allowed: false,
+      reason: 'CSP frame-ancestors 未包含 dsh-app://app：' + frameAncestors.slice(0, 120),
+      xFrameOptions,
+      frameAncestors,
+    }
+  }
+  return { allowed: true, reason: '未发现 X-Frame-Options / frame-ancestors 限制', xFrameOptions, frameAncestors }
+}
+
+/**
+ * Probe a preview URL from the Host: status, redirect chain, framing policy and
+ * whether it redirects to a login gate. Only response headers are read (the body
+ * is cancelled), no cookies/credentials are sent, redirects and time are bounded.
+ * @param {string} rawUrl - absolute http(s) URL from the panel
+ */
+async function probeUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || rawUrl === '' || rawUrl.length > 2048) {
+    return { ok: false, code: 'invalid-url', message: '地址为空或过长' }
+  }
+  let target
+  try {
+    target = new URL(rawUrl)
+  } catch {
+    return { ok: false, code: 'invalid-url', message: '地址格式有误' }
+  }
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    return { ok: false, code: 'invalid-protocol', message: '只诊断 http/https 地址' }
+  }
+  if (target.username || target.password) {
+    return { ok: false, code: 'invalid-url', message: '地址不能包含账号密码' }
+  }
+
+  const deadline = Date.now() + PROBE_TIMEOUT_MS
+  const redirects = []
+  let current = target.href
+  let response = null
+  for (let hop = 0; hop <= PROBE_MAX_REDIRECTS; hop += 1) {
+    let res
+    try {
+      res = await fetch(current, {
+        method: 'GET',
+        redirect: 'manual',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(Math.max(1200, deadline - Date.now())),
+      })
+    } catch (error) {
+      const name = error && typeof error.name === 'string' ? error.name : 'Error'
+      return {
+        ok: false,
+        code: name === 'TimeoutError' ? 'timeout' : 'fetch-failed',
+        message:
+          name === 'TimeoutError'
+            ? '诊断超时：目标地址没有在 6 秒内响应'
+            : '无法从 DSH 宿主机访问该地址（服务未启动、端口不对或网络不通）',
+      }
+    }
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location')
+      await res.body?.cancel()
+      if (location === null || hop === PROBE_MAX_REDIRECTS) {
+        response = res
+        break
+      }
+      const next = new URL(location, current).href
+      redirects.push({ status: res.status, from: current, to: next })
+      current = next
+      continue
+    }
+    response = res
+    break
+  }
+  if (response === null) {
+    return { ok: false, code: 'too-many-redirects', message: `跳转超过 ${PROBE_MAX_REDIRECTS} 次` }
+  }
+
+  const framing = assessFraming(response.headers)
+  const loginRedirected = redirects.some((item) => looksLikeLogin(item.to)) || looksLikeLogin(current)
+  const status = response.status
+  const requiresLogin = loginRedirected || status === 401 || status === 403
+  await response.body?.cancel()
+  return {
+    ok: true,
+    requestedUrl: target.href,
+    finalUrl: current,
+    status,
+    redirects,
+    framing,
+    login: {
+      detected: requiresLogin,
+      redirected: loginRedirected,
+      reason: loginRedirected
+        ? '跳转链里出现登录相关地址'
+        : status === 401 || status === 403
+          ? `目标返回 HTTP ${status}，通常表示需要登录或无权限`
+          : '未检测到登录跳转',
+    },
+  }
+}
 
 /** Cached probe result: display geometry barely changes; 30s avoids repeated spawns. */
 let displayCache = null
@@ -150,6 +292,26 @@ async function handler(req, res) {
       /(^|\/)\.\.(\/|$)/.test(pathname)
     ) {
       sendPlain(res, 400, 'Bad Request', method)
+      return
+    }
+
+    if (pathname === PROBE_PATH) {
+      let rawUrl = ''
+      try {
+        rawUrl = new URL(String(req.url ?? '/'), 'http://x').searchParams.get('url') ?? ''
+      } catch {
+        rawUrl = ''
+      }
+      const result = await probeUrl(rawUrl)
+      const body = JSON.stringify(result)
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Length': Buffer.byteLength(body),
+      })
+      if (method === 'HEAD') res.end()
+      else res.end(body)
       return
     }
 

@@ -122,7 +122,7 @@ function PocketH5Panel() {
 
     const style = document.createElement('style')
     style.setAttribute('data-pocket-h5-style', '')
-    style.textContent = CSS + QR_CSS
+    style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS
     const root = document.createElement('div')
     root.className = 'pocket-h5-root'
     root.innerHTML = MARKUP
@@ -130,6 +130,7 @@ function PocketH5Panel() {
 
     let dispose = null
     let disposeQr = null
+    let disposeDiagnose = null
     let disposeDisplay = null
     try {
       dispose = mountPocketH5(shadow, pocketDemoUrl())
@@ -137,6 +138,8 @@ function PocketH5Panel() {
       disposeDisplay = watchHostDisplayMetrics()
       // 上游工作台之外新增的「手机扫码」入口；失败不影响预览本身。
       disposeQr = mountQrFeature(shadow)
+      // 「诊断」入口：解释页面为什么打不开（禁止嵌入 / 需要登录）。
+      disposeDiagnose = mountDiagnoseFeature(shadow)
     } catch (error) {
       console.error('[pocket-h5] 工作台初始化失败', error)
     }
@@ -150,6 +153,11 @@ function PocketH5Panel() {
         if (typeof disposeQr === 'function') disposeQr()
       } catch (error) {
         console.error('[pocket-h5] 二维码入口清理失败', error)
+      }
+      try {
+        if (typeof disposeDiagnose === 'function') disposeDiagnose()
+      } catch (error) {
+        console.error('[pocket-h5] 诊断入口清理失败', error)
       }
       try {
         if (typeof disposeDisplay === 'function') disposeDisplay()

@@ -54,6 +54,11 @@
   `index.js` 代码与桌面端协议实现，未在本会话做桌面窗口内的视觉验证。
 - **新增一项上游没有的能力：手机扫码**（见 §9）。地址栏右侧二维码按钮 → 把当前预览地址渲染成
   离线二维码 → 手机扫码打开；编码器内置于 bundle，不联网、不新增依赖。
+- **新增一项上游没有的能力：预览诊断**（见 §13）。Host 半新增
+  `GET /pocket-h5/probe.json`：受控地请求目标地址（只读响应头、最多 5 次跳转、6 秒超时），
+  面板据此区分「站点禁止 iframe 嵌入」「被重定向到登录页 / 401」「服务访问不到」，并给出建议。
+  同时「新窗口打开」入口改名为「在系统浏览器打开」——它实际由 DSH 桌面端
+  `shell.openExternal` 交给系统浏览器，用的是系统浏览器的登录态。
 - **显示器物理尺寸探测**：Host 半在 macOS 上提供 `GET /pocket-h5/display.json`（CoreGraphics
   → 毫米/像素几何），面板用它把上游的 `window.pocketDisplayMetrics` 桥填上，使 `100%` 恢复为
   真机物理大小；非 macOS/失败时退回浏览器估算 + 尺子校准（见 §7.1）。
@@ -67,11 +72,12 @@
 ```
 dsh-pocket-h5/
 ├── package.json        # 包名 dsh-pocket-h5；声明 dsh.client（platform: web）；exports["./client"] → client.js
-├── index.js            # Host 半（Node）：ctx.webServer 注册 prefix /pocket-h5（demo 页 + display.json 探测）
+├── index.js            # Host 半（Node）：ctx.webServer 注册 prefix /pocket-h5（demo 页 + display.json + probe.json）
 ├── client.js           # 客户端半（由 build-client.mjs 生成，禁止手改）
 ├── build-client.mjs    # 构建脚本：ui/ + src/client/ → client.js，含静态自检与 vendor 打包
 ├── src/client/panel.js # 面板外壳：Shadow DOM 挂载 + 槽位注册 + 侧栏图标
 ├── src/client/qr.js    # 新增能力：手机扫码按钮/对话框/SVG 渲染
+├── src/client/diagnose.js # 新增能力：诊断按钮/对话框/结论翻译（禁止嵌入 vs 登录）
 ├── ui/                 # 上游快照（只读输入，原样，不手工修改）
 ├── vendor/qrcode/      # 离线二维码内核（node-qrcode 1.5.4 core + dijkstrajs，MIT，见其 PROVENANCE.md）
 ├── locale/             # 插件元数据本地化（zh/en，描述含二维码）
@@ -224,7 +230,8 @@ DSH Web GUI（宿主页面）
 | `pocket:refresh`（菜单 ⌘R） | 去掉；面板内刷新按钮 / 快捷键由宿主管理 | 不注册全局快捷键 | 无实现；`build-client.mjs` 不生成任何快捷键注册（宿主 ⌘R 刷新整个 GUI，见 §10） |
 | `pocket:display`（显示器变化） | `window resize` + ResizeObserver | 上游浏览器分支 | `client.js` 内 `window.addEventListener('resize', resizeDevice)` 与 `ResizeObserver(resizeDevice).observe($('canvas'))` |
 | `localStorage('pocket-h5-v1')` | 保留：面板与宿主同源，持久化外观/地址/校准/代理端点 | 不改存储格式 | `client.js` 内 `persist()` / 启动时 `JSON.parse(localStorage.getItem('pocket-h5-v1'))`，存储键原样 |
-| webview + `persist:pocket-chromium` 分区 | 普通 iframe，页面用自己的 Cookie | 面板不提供独立分区 | `ui/index.html` 的 `<iframe id="previewFrame">` 原样保留；Electron 块里把 iframe 换成 webview 的代码被删除 |
+| webview + `persist:pocket-chromium` 分区 | 普通 iframe，使用 **DSH 应用默认会话**的 Cookie（持久库在 `~/.dsh/electron-user-data/`） | 面板不提供独立分区，也不读取系统浏览器 Cookie | `ui/index.html` 的 `<iframe id="previewFrame">` 原样保留；Electron 块里把 iframe 换成 webview 的代码被删除 |
+| 应用内登录弹窗（上游 `openPage()` 创建同会话子窗口） | **不可用**：DSH 桌面端把 `window.open` 交给系统浏览器（`shell.openExternal`），登录结果回传不回 iframe；改用 `probe.json` 诊断 +「在系统浏览器打开」入口 + 手机扫码 | 这是宿主能力差异，不是配置问题；详见 §13 | `index.js`：`PROBE_PATH` / `probeUrl()` / `assessFraming()`；`src/client/diagnose.js`：`summarizeProbe` / `mountDiagnoseFeature`；`build-client.mjs` 替换按钮文案与帮助说明 |
 | 桌面菜单 / 单实例锁 / 应用退出清理 | 宿主负责生命周期；面板卸载时清理监听器/定时器/观察器 | | `client.js` 内 `mountPocketH5` 返回的 cleanup；`PocketH5Panel` 的 `useEffect` 卸载路径；Host 半由 DSH Loader 管理 |
 
 阶段 2/3 逐条核对结果：**12 行全部在代码中找到对应实现**（逐行证据见
@@ -318,6 +325,15 @@ DSH Web GUI（宿主页面）
    `resize` / `pocketdisplaychange` / `pocketproxyresult` 等 window 监听器、toast 与
    loading 定时器、`ResizeObserver`，都在卸载时移除/断开。
 
+3. **系统浏览器登录态无法继承；上游的「应用内弹窗登录」也没有了。**
+   面板不能读取 Safari/Chrome 的 Cookie（跨应用 + 系统钥匙串加密），也不应该去读。
+   内嵌预览用的是 DSH 应用自己的 Chromium 会话：**在预览里登录一次会保留**（含重启 DSH）。
+   但上游 Electron 版能让预览里的 `window.open` 在**同一会话的子窗口**里完成登录并把 Cookie
+   带回来；DSH 桌面端统一把 `window.open` 交给系统浏览器，回传不了——所以弹窗式登录 /
+   第三方 SSO 在预览里无法完成。落地方式：不隐藏限制，而是新增「诊断」入口（§13）把
+   「禁止嵌入」「需要登录」「服务访问不到」区分开，并把入口文案写成「在系统浏览器打开」，
+   同时保留手机扫码路径。**不静默、不伪装成可用。**
+
 ## 9. 手机扫码（新增能力）
 
 > 这一节描述的不是上游能力，而是面板版**新增**的「手机扫码打开当前预览地址」功能；
@@ -382,7 +398,10 @@ DSH Web GUI（宿主页面）
   与「不重写视觉层」冲突）。
 - **目标 H5 若设置 `X-Frame-Options` / CSP `frame-ancestors`，预览会空白**。
   工具不修改也不绕过响应头；解决办法是在你自己的开发服务里允许被嵌入，
-  或先用「在新窗口打开」确认 H5 服务本身可访问。
+  或先用「在系统浏览器打开」确认 H5 服务本身可访问。面板里的「诊断」会直接把这条原因标出来。
+- **登录态不能继承系统浏览器**：预览使用 DSH 应用自己的会话，在预览里登录会保留；
+  但 Safari/Chrome 的登录态无法读取，弹窗式 OAuth 也会被系统浏览器接管、回传不到预览。
+  需要登录的站点请优先在预览内登录；失败时用「在系统浏览器打开」或手机扫码（详见 §13）。
 - **HTTPS/安全上下文宿主页嵌 HTTP 子页会被拦**（混合内容）。分三种情况：
   - 宿主是 `http://127.0.0.1:<port>`（浏览器默认）：可嵌 http/https；
   - 宿主是 `dsh-app://app/`（桌面应用，注册为 `secure`）：`http://127.0.0.1` / `http://localhost`
@@ -473,7 +492,7 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
 - `ui/` 是上游快照，**不手工修改**；要升级上游，替换四个文件并重跑构建，然后按
   `docs/verification.md` 的清单回归（它记录的正是构建自检与人工核对项）。
 - 所有宿主适配只出现在 `build-client.mjs`；若某个转换规则不再需要，删规则而不是改产物。
-- `src/client/panel.js` / `src/client/qr.js` 是「片段源」而不是 ES 模块：它们被原样插进
+- `src/client/panel.js` / `src/client/qr.js` / `src/client/diagnose.js` 是「片段源」而不是 ES 模块：它们被原样插进
   factory 作用域，直接使用 `React`/`h`/`CSS`/`QR_CSS`/`mountPocketH5`/`pocketDemoUrl` 等符号，
   改它们时注意不要加 `import`/`export`。
 - `client.js`、`index.js` 由构建/交付流程负责；文档与验证记录只写 `docs/`。
@@ -482,3 +501,49 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
 - 升级 `vendor/qrcode`：从 `app.asar` 的 `node_modules/qrcode` 取新版 `lib/core/`（及其
   dijkstrajs 依赖）替换后跑 `node build-client.mjs && node tests/client-smoke.mjs`；
   `client-smoke` 会逐位对比打包内核与 vendor Node 模块。
+
+## 13. 登录态与嵌入诊断（阶段 5 新增）
+
+### 13.1 为什么不能「继承系统浏览器登录态」
+
+- Safari / Chrome 的 Cookie 属于各自应用，由系统钥匙串加密保存；DSH 插件（页面侧）与
+  Host（Node 侧）都没有合法的跨应用读取入口。这样的能力也不应实现：读浏览器凭据库属于
+  安全与隐私边界。
+- 内嵌预览用的是 **DSH 桌面应用的默认 Chromium 会话**（`~/.dsh/electron-user-data/` 下的
+  持久 Cookie 库），所以在预览框里登录一次，之后（包括重启 DSH）一般仍然有效——这是
+  「继承登录态」在面板里唯一成立的形态，继承的是 DSH 的会话，不是系统浏览器的。
+- 「调用目标计算机上的浏览器」是可行的，而且已经有入口：地址栏右侧按钮在 DSH 桌面端由
+  `shell.openExternal` 打开系统默认浏览器（http/https），用的是那边的登录态；面板只是不能
+  把那个浏览器的 Cookie 反向喂回 iframe。
+
+### 13.2 上游 Electron 版能做、面板做不到的部分
+
+上游 `main.cjs` 对预览用 webview，并把 `window.open` 交给 Chromium 创建**同一
+`persist:pocket-chromium` 会话的子窗口**，因此弹窗式登录能完成并把 Cookie 回传给预览。
+面板是宿主页面里的普通 iframe，`window.open` 由 DSH 桌面端的
+`setWindowOpenHandler` 统一交给系统浏览器（`shell.openExternal`），没有回传通道；
+插件也没有创建应用内窗口的 API。**这是宿主能力差异，不能靠配置修复。**
+
+### 13.3 `GET /pocket-h5/probe.json?url=<绝对 http(s) 地址>`
+
+- 校验：仅 http/https、长度 ≤2048、不允许 URL 内嵌账号密码；不读取用户文件。
+- 行为：`fetch(url, { redirect: 'manual' })` 手动跟随最多 5 次跳转，总超时 6 秒；
+  **只读响应头，正文立即 cancel**；不发送 Cookie/凭据。返回：
+  `{ ok, requestedUrl, finalUrl, status, redirects:[{status,from,to}], framing:{allowed,reason,xFrameOptions,frameAncestors}, login:{detected,redirected,reason} }`。
+- 判定：`X-Frame-Options: DENY/SAMEORIGIN` → 禁止（面板跨源）；CSP `frame-ancestors`
+  只有包含 `*` 或 `dsh-app:` 才算允许，`'none'`/其他列表 → 禁止；无相关头 → 允许（不代表
+  一定渲染，JS 反嵌入仍可能）。登录：跳转链/最终地址命中 login/signin/sso/oauth/authorize/
+  passport/cas/auth 等词，或返回 401/403。
+- 失败：`{ ok:false, code:'invalid-url'|'invalid-protocol'|'fetch-failed'|'timeout'|'too-many-redirects', message }`
+  （HTTP 仍为 200，方便面板展示）。
+- 安全边界：该路由由本机回环上的面板调用，作用等同于「由宿主替你 curl 一次目标地址」；
+  不写入磁盘、不记录日志、不缓存结果。
+
+### 13.4 面板侧
+
+- 「诊断」按钮（`#diagnoseButton`，插在「示例」旁边）→ 对话框；
+  `summarizeProbe(payload)` 是纯函数（`__test` 暴露给冒烟测试），负责把探测结果翻译成
+  「标题 + 事实 + 建议」三部分；
+- 「在系统浏览器打开」按钮（上游「新窗口打开」改名，`title`/`aria-label` 同步）+
+  帮助弹窗新增「需要登录的页面」说明；
+- 构建期约束：不新增 `require`、样式只进 Shadow DOM、卸载时移除按钮/对话框。
