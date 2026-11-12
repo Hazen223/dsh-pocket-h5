@@ -1,0 +1,4 @@
+# Pocket H5 预览面板：Host 半注册 /pocket-h5/demo.html 示例页路由，Client 半在侧栏渲染预览工作台。
+- insert:
+    - id: pocket-h5
+      name: 'dsh-pocket-h5'

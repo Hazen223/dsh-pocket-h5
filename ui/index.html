@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Pocket · H5 预览工作台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4M11 19h2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 18 17"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><rect x="7" y="5" width="10" height="16" rx="2" transform="rotate(-35 12 13)"/><path d="M15 2a9 9 0 0 1 7 8m-4-3 4 3 1-5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 10a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-1 1" transform="translate(1 2) scale(.9)"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h5m4 0h7M4 17h9m4 0h3"/><circle cx="11" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></symbol>
+  </defs></svg>
+
+  <div class="workspace">
+    <aside class="sidebar" aria-label="预览设置">
+      <div class="sidebar-brand">
+        <a class="brand" href="/" aria-label="Pocket 首页"><span class="brand-mark"><svg><use href="#i-phone"/></svg></span><span>Pocket<span class="brand-dot">.</span></span></a>
+        <span class="brand-sub">H5 预览</span>
+      </div>
+
+      <section class="settings-section address-section" aria-labelledby="addressTitle">
+        <h2 id="addressTitle" class="section-label">预览地址</h2>
+        <form id="addressForm" class="address-toolbar">
+          <div class="address-box"><svg><use href="#i-link"/></svg><input id="addressInput" aria-label="H5 地址或端口" placeholder="端口或地址，如 5173" autocomplete="off" spellcheck="false" list="recentAddresses"><datalist id="recentAddresses"></datalist></div>
+          <div class="address-buttons">
+            <button class="load-button" type="submit">打开预览<svg><use href="#i-arrow"/></svg></button>
+            <button id="refreshButton" type="button" class="icon-button" title="刷新 H5 页面 · ⌘R" aria-label="刷新 H5 页面"><svg><use href="#i-refresh"/></svg></button>
+            <button id="externalButton" type="button" class="icon-button" title="在新窗口打开 H5" aria-label="在新窗口打开 H5"><svg><use href="#i-external"/></svg></button>
+          </div>
+        </form>
+        <div class="preview-meta"><span class="preview-dot"></span><span id="previewName">内置示例</span><button id="demoButton" class="text-button small">示例</button></div>
+        <p id="loadStatus" class="status-pill" role="status">准备预览</p>
+        <details id="proxyDetails" class="fold proxy-details">
+          <summary><span class="summary-title">SOCKS5 代理</span><span id="proxyBadge" class="summary-badge">未启用</span></summary>
+          <form id="proxyForm">
+            <label class="setting-row" for="proxyEnabled"><span>使用应用内代理</span><input id="proxyEnabled" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label>
+            <div class="field-grid">
+              <label class="field" for="proxyHost"><span>服务器</span><input id="proxyHost" type="text" value="127.0.0.1" autocomplete="off" spellcheck="false" maxlength="253" aria-label="代理服务器"></label>
+              <label class="field field-port" for="proxyPort"><span>端口</span><input id="proxyPort" type="number" min="1" max="65535" step="1" value="1080" aria-label="代理端口"></label>
+            </div>
+            <label class="field" for="proxyUsername"><span>账号（可选）</span><input id="proxyUsername" class="proxy-field" type="text" autocomplete="off" maxlength="255" placeholder="无认证可留空"></label>
+            <label class="field" for="proxyPassword"><span>密码（可选）</span><input id="proxyPassword" class="proxy-field" type="password" autocomplete="off" maxlength="255" placeholder="仅本次运行使用"></label>
+            <button id="applyProxy" type="submit" class="outline-button">应用代理配置</button>
+            <p id="proxyStatus" class="setting-hint" role="status">需要 macOS 14+ 独立应用</p>
+            <p class="setting-hint">仅作用于 Pocket；本机地址直连。账号密码不保存到磁盘。</p>
+          </form>
+        </details>
+      </section>
+
+      <section class="settings-section display-section" aria-labelledby="displayTitle">
+        <h2 id="displayTitle" class="section-label">显示与尺寸</h2>
+        <label class="field-label" for="zoomSelect">显示比例</label>
+        <select id="zoomSelect"><option value="fit">适应窗口</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100% · 真机大小</option><option value="1.25">125%</option><option value="1.5">150%</option></select>
+        <div class="scale-readout"><strong id="scaleLabel">100% · 真机大小</strong><span id="physicalSize">机身 71.5 × 149.6 mm</span></div>
+        <p id="calibrationStatus" class="setting-hint"></p>
+        <details id="calibrationDetails" class="fold calibration-details">
+          <summary><span class="summary-title">校准实际尺寸</span></summary>
+          <p class="setting-hint">用尺子量出下方线段从左到右的长度，再填入测量值。</p>
+          <div class="ruler-wrap"><div id="calibrationRuler" class="calibration-ruler" aria-label="待测量的校准线段"></div></div>
+          <form id="calibrationForm">
+            <label class="field-label" for="measuredLength">测得长度（毫米）</label>
+            <div class="calibration-input"><input id="measuredLength" type="number" min="5" max="300" step="0.1" placeholder="例如 42.3" required><button class="load-button" type="submit">应用</button></div>
+          </form>
+          <button id="clearCalibration" class="text-button small">恢复系统估计</button>
+          <p class="setting-hint">换显示器或修改浏览器缩放后，请检查尺寸。校准仅保存在本机。</p>
+        </details>
+      </section>
+
+      <section class="settings-section device-section" aria-labelledby="deviceTitle">
+        <h2 id="deviceTitle" class="section-label">模拟设备</h2>
+        <div class="device-card">
+          <div class="mini-phone"><span></span></div>
+          <div class="device-info"><strong>iPhone 17</strong><small>6.3 英寸 · 标准版</small></div>
+          <svg class="device-check"><use href="#i-check"/></svg>
+        </div>
+        <button id="rotateButton" class="outline-button"><svg><use href="#i-rotate"/></svg><span>切换为横屏</span></button>
+        <p id="viewportLabel" class="device-content">402 × 778 内容区</p>
+        <details class="fold spec-details">
+          <summary><span class="summary-title">屏幕规格</span></summary>
+          <div class="spec-line"><span>逻辑屏幕</span><strong id="screenSpec">402 × 874</strong></div>
+          <div class="spec-line"><span>物理分辨率</span><span>1206 × 2622</span></div>
+          <div class="spec-line"><span>屏幕密度</span><span>460 PPI · @3x</span></div>
+        </details>
+      </section>
+
+      <details class="settings-section appearance-section">
+        <summary class="section-label">系统外观</summary>
+        <label class="setting-row" for="statusToggle"><span>iOS 状态栏<small>时间、信号和电池</small></span><input id="statusToggle" type="checkbox" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
+        <label class="setting-row" for="homeToggle"><span>底部手势条</span><input id="homeToggle" type="checkbox" role="switch" checked><span class="switch" aria-hidden="true"></span></label>
+        <div class="field-label">状态栏文字</div>
+        <div class="segments" id="themeOptions" aria-label="状态栏文字颜色"><button data-theme="dark" aria-pressed="true">深色</button><button data-theme="light" aria-pressed="false">浅色</button></div>
+        <div class="inline-controls"><label for="barColor">状态栏背景</label><div class="color-control"><select id="barColor" aria-label="状态栏背景"><option value="#ffffff">白色</option><option value="#ededed">浅灰</option><option value="#111111">黑色</option></select><span id="colorValue">#FFFFFF</span></div></div>
+        <label class="inline-controls" for="batteryLevel"><span>电池电量</span><span class="inline-value"><output id="batteryOutput">100</output>%</span></label>
+        <input class="range-input" id="batteryLevel" type="range" min="0" max="100" value="100" aria-label="电池电量">
+      </details>
+
+      <section class="settings-section layout-settings" aria-labelledby="layoutTitle">
+        <h2 id="layoutTitle" class="section-label">页面布局</h2>
+        <label class="field-label" for="layoutMode">页面显示方式</label>
+        <select id="layoutMode"><option value="inset">预留状态栏与底部空间</option><option value="overlay">全屏页面 · 系统栏覆盖</option></select>
+        <label class="setting-row" for="guideToggle"><span>安全区参考线</span><input id="guideToggle" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label>
+        <p class="setting-hint" id="layoutHint">系统栏独立显示，页面内容不会被遮挡。</p>
+      </section>
+
+      <div class="sidebar-help"><button id="helpButton" class="text-button"><svg><use href="#i-info"/></svg>使用说明</button><button id="troubleshootButton" class="text-button">页面无法打开？</button></div>
+      <button id="devToolsButton" class="outline-button" hidden>打开开发者工具</button>
+      <p id="engineInfo" class="setting-hint" hidden></p>
+      <div class="sidebar-bottom"><span class="saved-dot"></span>外观自动保存<button id="resetButton" title="恢复默认外观，保留显示器校准">重置外观</button></div>
+      <p class="sidebar-note">外观与布局预览 · 非 iOS 模拟器</p>
+    </aside>
+
+    <main class="main-panel" aria-label="手机预览">
+      <div class="canvas" id="canvas">
+        <div id="deviceSlot" class="device-slot"><div id="phone" class="phone">
+          <span class="side-key key-action"></span><span class="side-key key-volume-up"></span><span class="side-key key-volume-down"></span><span class="side-key key-power"></span>
+          <div id="screen" class="screen">
+            <iframe id="previewFrame" title="H5 页面预览" src="about:blank" allow="clipboard-read; clipboard-write; fullscreen; autoplay" allowfullscreen></iframe>
+            <div id="statusBar" class="status-bar"><span class="status-time">9:41</span><div class="status-right"><svg class="signal" viewBox="0 0 20 14" aria-label="信号满格"><rect x="0" y="8" width="3" height="6" rx="1"/><rect x="5" y="5.5" width="3" height="8.5" rx="1"/><rect x="10" y="3" width="3" height="11" rx="1"/><rect x="15" width="3" height="14" rx="1"/></svg><svg class="wifi" viewBox="0 0 20 15" aria-label="Wi-Fi"><path d="M1 5a14 14 0 0 1 18 0M4 8.5a9 9 0 0 1 12 0M7.2 12a4 4 0 0 1 5.6 0" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="14" r="1.1"/></svg><span class="battery"><span id="batteryFill" class="battery-fill"></span><span id="batteryText">100</span></span></div></div>
+            <div id="island" class="dynamic-island"><span></span></div>
+            <div id="homeArea" class="home-area"><span></span></div>
+            <div id="guides" class="safe-guides" hidden><div class="guide-top"><span>顶部参考区</span></div><div class="guide-bottom"><span>底部参考区</span></div></div>
+          </div>
+        </div></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="helpBackdrop" class="help-backdrop" hidden></div>
+  <dialog id="helpDialog"><div class="dialog-heading"><div><span class="eyebrow">使用指南</span><h2>让每个 H5，都有一部手机。</h2></div><button id="closeHelpButton" class="icon-button" aria-label="关闭说明"><svg><use href="#i-close"/></svg></button></div><div class="help-content"><div class="help-step"><b>01</b><div><h3>启动你的 H5，再输入地址</h3><p>直接输入 <code>5173</code>、<code>localhost:3000/path</code> 或完整的 HTTP / HTTPS 地址。本工具不会替你启动 H5 项目。端口指向当前这台电脑。</p></div></div><div class="help-step"><b>02</b><div><h3>按实际逻辑尺寸检查布局</h3><p>竖屏为 402 × 874。默认预留顶部 62px、底部 34px，内容区为 402 × 778；横屏预留左右各 62px、底部 21px。这些系统栏和安全区是可视化参考值。</p></div></div><div class="help-step"><b>03</b><div><h3>检查遮挡，或专注页面</h3><p>「全屏页面」会让 H5 铺满屏幕，再覆盖状态栏与手势条。参考线只作提示，不会修改 H5 的 CSS，也不会把模拟值注入 <code>env(safe-area-inset-*)</code>。</p></div></div><div class="help-note"><h3>如果页面空白</h3><p>先点击「在新窗口打开」按钮，确认 H5 服务正在运行。目标页面的 <code>X-Frame-Options</code> 或 CSP <code>frame-ancestors</code> 可能禁止嵌入，需要在你自己的开发服务里允许此预览地址。HTTPS 页面也可能拦截 HTTP 嵌入。</p><p>嵌入页加载事件不代表页面一定成功显示。本工具不绕过网站限制；请只在自己的开发项目中调整设置。</p></div><p class="help-footnote">画布沿用桌面浏览器的渲染引擎、User-Agent、设备像素比和输入方式。@3x 是规格说明；缩放不改变 iframe 的 CSS 尺寸。涉及 Safari、键盘、触摸、相机和真实安全区时，请在 iPhone 上验证。<a href="https://www.apple.com/iphone-17/specs/" target="_blank" rel="noopener noreferrer">查看 Apple 屏幕规格 ↗</a></p></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "name": "dsh-pocket-h5",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pocket H5 preview panel: preview and inspect H5 pages in the DSH Web UI at iPhone 17 size, appearance, and safe-area checks.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib",
+    "ui",
+    "vendor",
+    "src",
+    "build-client.mjs",
+    "tests",
+    "locale/*.json",
+    "icon.svg",
+    "docs",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "license": "MIT",
+  "author": "Hazen223",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hazen223/dsh-pocket-h5.git"
+  },
+  "homepage": "https://github.com/Hazen223/dsh-pocket-h5#readme",
+  "bugs": {
+    "url": "https://github.com/Hazen223/dsh-pocket-h5/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "h5",
+    "iphone",
+    "preview",
+    "qrcode",
+    "panel"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
