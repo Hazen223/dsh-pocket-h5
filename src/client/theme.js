@@ -222,6 +222,20 @@ const PANEL_THEME_CSS = String.raw`
   border-radius: 0 !important;
   box-shadow: none !important;
   overflow: visible !important;
+  /* 用机身剪影裁切：页面仍是矩形，但只显示在手机外轮廓之内 */
+  -webkit-mask-image: var(--p-bezel-mask);
+  mask-image: var(--p-bezel-mask);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.phone.landscape {
+  -webkit-mask-image: var(--p-bezel-mask-l);
+  mask-image: var(--p-bezel-mask-l);
+}
+.device-slot {
+  filter: drop-shadow(0 16px 30px light-dark(rgba(13, 14, 16, 0.18), rgba(0, 0, 0, 0.55)));
 }
 .phone::before {
   content: "";
@@ -232,7 +246,6 @@ const PANEL_THEME_CSS = String.raw`
   background-image: var(--p-bezel-image);
   background-repeat: no-repeat;
   background-size: 100% 100%;
-  filter: drop-shadow(0 16px 30px light-dark(rgba(13, 14, 16, 0.18), rgba(0, 0, 0, 0.55)));
 }
 /* 横屏：同一张竖屏边框旋转 -90°（顶部 → 左侧），几何由 app.js 的边距保证 */
 .phone.landscape::before {
@@ -592,10 +605,15 @@ dialog::backdrop { background: var(--p-mask); }
   background: var(--bar-color);
   pointer-events: none;
 }
+.status-time,
+#batteryText {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+}
 .status-time {
   width: auto;
   min-width: 0;
   font-size: 17px;
+  letter-spacing: -0.41px;
   line-height: 1;
   font-weight: 600;
   letter-spacing: -0.2px;
@@ -794,6 +812,8 @@ function mountPanelTheme(shadow) {
     root.style.setProperty('--p-bezel-image', 'url("' + POCKET_BEZEL_IMAGE + '")')
     root.style.setProperty('--p-bezel-w', POCKET_BEZEL.portrait.outerW + 'px')
     root.style.setProperty('--p-bezel-h', POCKET_BEZEL.portrait.outerH + 'px')
+    root.style.setProperty('--p-bezel-mask', 'url("' + POCKET_BEZEL_MASK + '")')
+    root.style.setProperty('--p-bezel-mask-l', 'url("' + POCKET_BEZEL_MASK_LANDSCAPE + '")')
   }
 
   const brandRow = shadow.querySelector('.sidebar-brand')

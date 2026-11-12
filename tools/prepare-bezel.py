@@ -78,6 +78,15 @@ def main() -> None:
             "screenH": screen["width"] // ratio,
         },
     }
+    # 机身剪影（用于把矩形页面裁到手机外轮廓，圆角处不会露出页面）
+    body = ndimage.binary_fill_holes(np.array(cropped.getchannel("A")) > 16)
+    def save_mask(mask, path):
+        out = np.zeros((mask.shape[0], mask.shape[1], 4), np.uint8)
+        out[mask] = (255, 255, 255, 255)
+        Image.fromarray(out, "RGBA").save(path, "WEBP", lossless=True, quality=100, method=6)
+    save_mask(body, OUT / "bezel-mask.webp")
+    save_mask(np.rot90(body, 1), OUT / "bezel-mask-landscape.webp")
+
     payload = {
         "source": "user-provided iPhone frame; screen opening cut to transparency, cropped to the frame",
         "image": {"width": cropped.width, "height": cropped.height, "screen": screen, "radius": 270},

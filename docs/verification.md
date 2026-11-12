@@ -810,3 +810,43 @@ node tests/bridge-unit.mjs   # 27/27 ok
   彻底避免被侧栏文字/滚动容器盖住或裁切；不支持时回退到 `position: fixed` + `hidden`。
 - 浮层左边缘对齐问号、默认显示在下方，靠近窗口底部时翻到上方；`z-index: 60`。
 - 构建：client.js 318,448 B（sha256 `6e84afe8…`）；client-smoke 103/103 通过。
+
+---
+
+## 19. 阶段 11（机身剪影裁切：修四角露白）
+
+> 触发：用户截图指出外框左上角露出矩形页面的白角。
+
+### 19.1 原因
+
+屏幕开口是 squircle，页面是矩形；矩形页面的**包围盒角点**比手机外轮廓的圆角更靠外（外框外圆角
+半径约 85 逻辑 px，开口包围盒角点落在机身轮廓之外），所以页面白角会从外框边缘露出来。
+
+### 19.2 修复
+
+- `tools/prepare-bezel.py` 新增输出：`bezel-mask.webp`（机身剪影，1,266 B）与
+  `bezel-mask-landscape.webp`（旋转 90°，1,270 B）；
+- `.phone` 加 `mask-image: var(--p-bezel-mask)` / 横屏 `var(--p-bezel-mask-l)`，
+  `mask-size: 100% 100%`：页面仍矩形，但整棵子树被裁到手机外轮廓内；
+- 阴影从 `.phone::before` 的 `filter` 移到 `.device-slot`，避免被 mask 裁掉；
+- 状态栏字体显式使用系统 SF Pro（`-apple-system / SF Pro Text / SF Pro Display`），字距 -0.41px；
+- 素材剪影合计约 2.5 KiB，构建期内联。
+
+### 19.3 验证
+
+```text
+node build-client.mjs        # 幂等；client.js 322,878 B（sha256 b76ad262…）
+node --check client.js       # ok
+node tests/host-smoke.mjs    # 30/30 ok
+node tests/client-smoke.mjs  # 107/107 ok（新增剪影/横屏剪影/mask/SF Pro 断言）
+node tests/bridge-unit.mjs   # 27/27 ok
+```
+
+### 19.4 未验证项（阶段 11）
+
+1. 实际渲染下四角是否完全不露白、剪影边缘是否与金属 AED 边贴合（已用素材级合成验证：矩形页面
+   被剪影裁切后四角干净）；
+2. 横屏剪影方向、深色主题下投影观感；
+3. 若需要「完全官方」的状态栏图标：SF Symbols 资源不能随公共仓库分发；如用户从 Apple 设计资源
+   导出官方 SVG，可直接替换构建里的三个图标路径。
+4. 仅 client.js 变更：刷新 GUI 即可。

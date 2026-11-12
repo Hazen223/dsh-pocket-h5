@@ -33,7 +33,7 @@ dsh-pocket-h5/
 ├── locale/{zh,en}.json   # 插件管理页显示的名称与描述
 ├── icon.svg              # 插件图标（复用上游手机图形）
 ├── tests/host-smoke.mjs  # Host 冒烟测试（30 项：demo/display/probe/bridge + 方法/HEAD/穿越边界）
-├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（103 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层/边框/控件/帮助）
+├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（107 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层/边框/控件/帮助）
 ├── tests/bridge-unit.mjs # 登录桥单测（27 项：Cookie 解析/过滤/代理注入/头部改写/隧道）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
@@ -86,7 +86,7 @@ node build-client.mjs
 
 ```sh
 node tests/host-smoke.mjs     # 30 项：demo/display/probe/bridge 路由、方法、HEAD、穿越、Cookie 注入与错误边界
-node tests/client-smoke.mjs   # 103 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层、边框几何、标准控件、? 提示
+node tests/client-smoke.mjs   # 107 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层、边框几何、标准控件、? 提示、剪影裁切
 node tests/bridge-unit.mjs    # 27 项：Safari binarycookies、域名/路径过滤、代理注入、Set-Cookie/Location 改写、隧道
 ```
 
@@ -128,7 +128,7 @@ node build-client.mjs      # 重新生成 client.js
   当「手机壳」**盖在长方形页面之上**：页面本身是矩形、没有 CSS 圆角，四角由不透明的边框内框自然裁切
   （素材开口是 iOS 的 squircle，比 CSS 圆角更准）。屏幕开口按 402×874 @3x 的几何定位，横屏时同一张图
   旋转 90°；换边框只需把新图交给 `python3 tools/prepare-bezel.py <frame.png>`。
-- **iOS 标准状态栏 / 手势条**：按 Apple 的几何重画——状态栏 62pt 高、时间 17pt/600、左内边距 54，
+- **iOS 标准状态栏 / 手势条**：按 Apple 的几何重画（时间用系统 SF Pro）——状态栏 62pt 高、时间 17pt/600、左内边距 54，
   信号 18×12 / Wi‑Fi 17×12 / 电池 27×13（百分比在电池体内），底部手势条 134×5、圆角 2.5、距底 8pt。
 - **黑暗模式**：所有颜色用 `light-dark()` 成对声明（`--p-*` 令牌），跟随 DSH 的 `color-scheme`
   自动切换，不需要单独开关；在 DSH 设置里切到深色主题即可看到。设备外框/状态栏保持中性灰，

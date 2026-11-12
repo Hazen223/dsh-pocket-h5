@@ -313,6 +313,10 @@ check(source.includes('className = \'ph-help\''), 'sidebar explanations are move
 check(source.includes('.ph-tip'), 'help buttons show a styled hover tooltip')
 check(source.includes("settings-section .setting-hint"), 'secondary hint paragraphs are hidden from the layout')
 check(source.includes('data-tip-from'), 'help tooltips can append live status text')
+check(source.includes('--p-bezel-mask'), 'rectangular page is clipped to the bezel silhouette')
+check(source.includes('POCKET_BEZEL_MASK_LANDSCAPE'), 'landscape silhouette is bundled too')
+check(source.includes('mask-size: 100% 100%'), 'silhouette mask is stretched to the phone box')
+check(source.includes('SF Pro Text'), 'status bar text uses the SF Pro system font stack')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

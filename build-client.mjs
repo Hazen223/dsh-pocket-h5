@@ -348,10 +348,15 @@ const themeSource = await read('src/client/theme.js')
 
 /* 设备边框素材：用户提供的 iPhone 外框（屏幕开口已抠空），几何见 assets/README.md */
 const bezelImageBytes = await readFile(join(root, 'src/client/assets/bezel.webp'))
+const bezelMaskBytes = await readFile(join(root, 'src/client/assets/bezel-mask.webp'))
+const bezelMaskLandscapeBytes = await readFile(join(root, 'src/client/assets/bezel-mask-landscape.webp'))
 const bezelMetrics = JSON.parse(await read('src/client/assets/bezel.json'))
 if (bezelImageBytes.length > 200 * 1024) fail('边框素材过大：' + bezelImageBytes.length + ' 字节（应小于 200 KiB）')
 if (bezelMetrics?.logical?.portrait?.screenW !== 402 || bezelMetrics?.logical?.portrait?.screenH !== 874) {
   fail('边框几何异常：屏幕开口应是 402x874 逻辑像素')
+}
+if (bezelMaskBytes.length > 20 * 1024 || bezelMaskLandscapeBytes.length > 20 * 1024) {
+  fail('机身剪影素材过大：' + bezelMaskBytes.length + '/' + bezelMaskLandscapeBytes.length + ' 字节')
 }
 ok('边框素材 ' + (bezelImageBytes.length / 1024).toFixed(1) + ' KiB · ' +
   bezelMetrics.image.width + 'x' + bezelMetrics.image.height + '（屏幕 ' +
@@ -464,6 +469,9 @@ const bezelRuntime = [
   '    /* ---- 设备边框（用户提供的 iPhone 外框；屏幕开口已抠空，几何见 src/client/assets/README.md） ---- */',
   '    const POCKET_BEZEL_IMAGE = ' + JSON.stringify(bezelImageUrl) + ';',
   '    const POCKET_BEZEL = ' + JSON.stringify(bezelMetrics.logical) + ';',
+  '    // 机身剪影：矩形页面按这个 alpha 裁切，圆角处不会露出页面边角',
+  '    const POCKET_BEZEL_MASK = ' + JSON.stringify('data:image/webp;base64,' + bezelMaskBytes.toString('base64')) + ';',
+  '    const POCKET_BEZEL_MASK_LANDSCAPE = ' + JSON.stringify('data:image/webp;base64,' + bezelMaskLandscapeBytes.toString('base64')) + ';',
   '',
 ].join('\n')
 
@@ -551,6 +559,8 @@ const bundle = [
 
 if (!bundle.includes('data:image/webp;base64,')) fail('client bundle 没有内联设备边框素材')
 if (!bundle.includes('const POCKET_BEZEL =')) fail('client bundle 没有注入边框几何')
+if (!bundle.includes('const POCKET_BEZEL_MASK =')) fail('client bundle 没有注入机身剪影')
+if (!bundle.includes('const POCKET_BEZEL_MASK_LANDSCAPE =')) fail('client bundle 没有注入横屏机身剪影')
 if (failures.length > 0) {
   console.error(`\n[build] 失败：${failures.length} 个转换/校验问题，未写出 client.js。`)
   process.exit(1)
