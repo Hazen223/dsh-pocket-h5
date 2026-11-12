@@ -1128,7 +1128,7 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
           <span class="side-key key-action"></span><span class="side-key key-volume-up"></span><span class="side-key key-volume-down"></span><span class="side-key key-power"></span>
           <div id="screen" class="screen">
             <iframe id="previewFrame" title="H5 页面预览" src="about:blank" allow="clipboard-read; clipboard-write; fullscreen; autoplay" allowfullscreen></iframe>
-            <div id="statusBar" class="status-bar"><span class="status-time">9:41</span><div class="status-right"><svg class="signal" viewBox="0 0 20 14" aria-label="信号满格"><rect x="0" y="8" width="3" height="6" rx="1"/><rect x="5" y="5.5" width="3" height="8.5" rx="1"/><rect x="10" y="3" width="3" height="11" rx="1"/><rect x="15" width="3" height="14" rx="1"/></svg><svg class="wifi" viewBox="0 0 20 15" aria-label="Wi-Fi"><path d="M1 5a14 14 0 0 1 18 0M4 8.5a9 9 0 0 1 12 0M7.2 12a4 4 0 0 1 5.6 0" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="10" cy="14" r="1.1"/></svg><span class="battery"><span id="batteryFill" class="battery-fill"></span><span id="batteryText">100</span></span></div></div>
+            <div id="statusBar" class="status-bar"><span class="status-time">9:41</span><div class="status-right"><svg class="signal" viewBox="0 0 18 12" aria-label="信号"><rect x="0" y="7.6" width="3" height="4.4" rx="1"/><rect x="5" y="5.1" width="3" height="6.9" rx="1"/><rect x="10" y="2.6" width="3" height="9.4" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg class="wifi" viewBox="0 0 17 12" aria-label="Wi-Fi"><path d="M1.3 3.9a10.9 10.9 0 0 1 14.4 0"/><path d="M4 6.7a7 7 0 0 1 9 0"/><path d="M6.7 9.5a3.1 3.1 0 0 1 3.6 0"/><circle cx="8.5" cy="11.4" r="1.05"/></svg><span class="battery"><span id="batteryFill" class="battery-fill"></span><span id="batteryText">100</span></span></div></div>
             <div id="island" class="dynamic-island"><span></span></div>
             <div id="homeArea" class="home-area"><span></span></div>
             <div id="guides" class="safe-guides" hidden><div class="guide-top"><span>顶部参考区</span></div><div class="guide-bottom"><span>底部参考区</span></div></div>
@@ -3861,7 +3861,7 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
         frame.style.top = `${inset ? top : 0}px`;
         frame.style.width = `${width - (inset ? side * 2 : 0)}px`;
         frame.style.height = `${height - (inset ? top + bottom : 0)}px`;
-        $('batteryFill').style.width = `${24 * state.battery / 100}px`;
+        $('batteryFill').style.width = `${21 * state.battery / 100}px`;
         const fill = state.battery <= 20 ? '#777777' : (state.theme === 'dark' ? '#161616' : '#ffffff');
         $('batteryFill').style.background = fill;
         $('batteryText').textContent = String(state.battery);
@@ -4982,9 +4982,9 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
     }
 
     /* ==================================================================
-     * 2.5 设备外框：用用户提供的 iPhone 边框图片替代上游 CSS 手绘外框
-     *     .phone 仍是上游布局盒（宽高/内边距由 app.js 按边框几何计算），
-     *     ::before 只负责画边框，.screen 落在图片的屏幕开口上。
+     * 2.5 设备外框：用边框图片当「手机壳」盖在长方形页面之上
+     *     .screen 是普通矩形（无圆角），边框图片叠在其上方，用不透明的
+     *     内框/圆角遮住页面四角 —— 圆角来自素材本身，不靠 CSS 拟合。
      * ================================================================== */
     .phone {
       background: none !important;
@@ -4997,7 +4997,7 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
       content: "";
       position: absolute;
       inset: 0;
-      z-index: 0;
+      z-index: 5;
       pointer-events: none;
       background-image: var(--p-bezel-image);
       background-repeat: no-repeat;
@@ -5015,7 +5015,7 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
     }
     .phone .side-key { display: none !important; }
     .phone .screen {
-      border-radius: var(--p-screen-radius);
+      border-radius: 0 !important;
       box-shadow: none !important;
     }
 
@@ -5338,6 +5338,115 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
     }
     .help-backdrop { background: var(--p-mask); }
 
+    /* ==================================================================
+     * 5.5 iOS 状态栏与底部手势条：按 Apple 标准几何重画
+     *     - 状态栏 62pt 高，内容垂直居中：时间左内边距 54、右侧图标组右内边距 26；
+     *     - 时间 17pt / 600 / 无衬线，数字等宽；
+     *     - 信号 18x12（4 根圆角柱）、Wi-Fi 17x12（3 段弧 + 点）、电池 27x13（25 身 + 2 尖端）；
+     *     - 底部手势条 134x5、圆角 2.5、距底 8pt。
+     * ================================================================== */
+    .status-bar {
+      height: 62px;
+      padding: 0 26px 0 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--ink);
+      background: var(--bar-color);
+      pointer-events: none;
+    }
+    .status-time {
+      width: auto;
+      min-width: 0;
+      font-size: 17px;
+      line-height: 1;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      font-variant-numeric: tabular-nums;
+      text-align: left;
+    }
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 20px;
+      flex: none;
+    }
+    .status-right svg { stroke: none; fill: currentColor; }
+    .signal { width: 18px; height: 12px; }
+    .wifi { width: 17px; height: 12px; margin-top: 0; }
+    .wifi path { stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; fill: none; }
+    .wifi circle { fill: currentColor; }
+    .battery {
+      box-sizing: border-box;
+      width: 27px;
+      height: 13px;
+      margin-right: 2px;
+      padding: 2px;
+      border: 1px solid currentColor;
+      border-radius: 4.2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .battery:after {
+      content: "";
+      position: absolute;
+      right: -3px;
+      top: 3.6px;
+      width: 2px;
+      height: 5px;
+      border-radius: 0 2px 2px 0;
+      background: currentColor;
+      opacity: 0.4;
+    }
+    .battery-fill {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      bottom: 2px;
+      width: 21px;
+      border-radius: 2.4px;
+      background: currentColor;
+      z-index: 0;
+    }
+    #batteryText {
+      position: relative;
+      z-index: 1;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.3px;
+      font-variant-numeric: tabular-nums;
+    }
+    .dynamic-island {
+      top: 12px;
+      width: 126px;
+      height: 36px;
+      border-radius: 18px;
+    }
+    .dynamic-island span {
+      right: 10px;
+      top: 10px;
+      width: 12px;
+      height: 12px;
+    }
+    .home-area {
+      height: 34px;
+      background: var(--bar-color);
+    }
+    .home-area > span {
+      width: 134px;
+      height: 5px;
+      border-radius: 2.5px;
+      bottom: 8px;
+      background: var(--ink);
+      opacity: 1;
+    }
+    .landscape .home-area { height: 21px; }
+    .landscape .home-area span { width: 180px; bottom: 7px; }
+
     /* 二维码 / 诊断 / 登录桥 的细节配色（结构由各自片段提供） */
     .qr-dialog .qr-frame { border-color: var(--p-border); background: #ffffff; }
     .qr-dialog .qr-empty { color: var(--p-text-tertiary); }
@@ -5390,7 +5499,6 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
         root.style.setProperty('--p-bezel-image', 'url("' + POCKET_BEZEL_IMAGE + '")')
         root.style.setProperty('--p-bezel-w', POCKET_BEZEL.portrait.outerW + 'px')
         root.style.setProperty('--p-bezel-h', POCKET_BEZEL.portrait.outerH + 'px')
-        root.style.setProperty('--p-screen-radius', POCKET_BEZEL.radius + 'px')
       }
 
       const brandRow = shadow.querySelector('.sidebar-brand')

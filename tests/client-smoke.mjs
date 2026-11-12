@@ -303,6 +303,12 @@ check(source.includes('mountPanelTheme'), 'appearance layer is mounted with the 
 check(source.includes('data:image/webp;base64,'), 'device bezel image is inlined into the bundle')
 check(source.includes('POCKET_BEZEL.portrait'), 'device geometry is bezel-based, not a hand-drawn frame')
 check(source.includes('--p-bezel-image'), 'theme layer paints the bezel as the phone background')
+check(source.includes('border-radius: 0 !important'), 'screen is rectangular; the bezel overlay clips the corners')
+check(source.includes('class="status-time"'), 'status bar uses the Apple-standard time element')
+check(source.includes('viewBox="0 0 18 12"'), 'status bar signal icon uses the standard 18x12 geometry')
+check(source.includes('cy="11.4"'), 'status bar Wi-Fi icon uses the standard arcs + dot')
+check(source.includes('21 * state.battery'), 'battery fill width matches the iOS battery body')
+check(source.includes('width: 134px'), 'home indicator uses the standard 134px width')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

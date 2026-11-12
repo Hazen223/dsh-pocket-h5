@@ -120,6 +120,28 @@ function buildMarkup(html) {
   if (!body.includes(proxyHintBefore)) fail('代理提示文案（' + proxyHintBefore + '）未找到')
   body = body.split(proxyHintBefore).join(PANEL_PROXY_HINT)
 
+  // 状态栏按 Apple 标准几何重画（时间 17pt/600，信号 18x12、Wi-Fi 17x12、电池 27x13），
+  // 同时保留 app.js 依赖的 #batteryFill / #batteryText 与类名。
+  const statusBarStart = body.indexOf('<div id="statusBar"')
+  const islandStart = body.indexOf('<div id="island"')
+  if (statusBarStart < 0 || islandStart < statusBarStart) fail('状态栏标记未找到')
+  {
+    const statusBar =
+      '<div id="statusBar" class="status-bar">' +
+      '<span class="status-time">9:41</span>' +
+      '<div class="status-right">' +
+      '<svg class="signal" viewBox="0 0 18 12" aria-label="信号"><rect x="0" y="7.6" width="3" height="4.4" rx="1"/>' +
+      '<rect x="5" y="5.1" width="3" height="6.9" rx="1"/><rect x="10" y="2.6" width="3" height="9.4" rx="1"/>' +
+      '<rect x="15" y="0" width="3" height="12" rx="1"/></svg>' +
+      '<svg class="wifi" viewBox="0 0 17 12" aria-label="Wi-Fi"><path d="M1.3 3.9a10.9 10.9 0 0 1 14.4 0"/>' +
+      '<path d="M4 6.7a7 7 0 0 1 9 0"/><path d="M6.7 9.5a3.1 3.1 0 0 1 3.6 0"/>' +
+      '<circle cx="8.5" cy="11.4" r="1.05"/></svg>' +
+      '<span class="battery"><span id="batteryFill" class="battery-fill"></span>' +
+      '<span id="batteryText">100</span></span>' +
+      '</div></div>\n            '
+    body = body.slice(0, statusBarStart) + statusBar + body.slice(islandStart)
+  }
+
   // 「新窗口打开」在 DSH 桌面端实际由 shell.openExternal 交给系统默认浏览器，
   // 用的是系统浏览器的登录态；把入口文案写准（title 与 aria-label 同文）。
   const externalLabelBefore = '在新窗口打开 H5'
@@ -263,7 +285,11 @@ function buildApp(source, bezel) {
     'const device = { ppi: 460, pixelRatio: 3, bodyWidthMm: ' + bodyWidthMm + ', bodyHeightMm: ' + bodyHeightMm + ' }; // 外框尺寸来自 src/client/assets/bezel.json',
   )
 
-  const paddingLine = "$('phone').style.padding = `${(outerHeight - height) / 2 - 1}px ${(outerWidth - width) / 2 - 1}px`;"
+  const batteryFillLine = "$('batteryFill').style.width = `${24 * state.battery / 100}px`;"
+  if (!code.includes(batteryFillLine)) fail('app.js 的电池填充宽度行未找到')
+  code = code.split(batteryFillLine).join("$('batteryFill').style.width = `${21 * state.battery / 100}px`;")
+
+  const paddingLine = "$('phone').style.padding = `${(outerHeight - height) / 2 - 1}px ${(outerWidth - width) / 2 - 1}px`;";
   if (!code.includes(paddingLine)) fail('app.js 的外框 padding 行未找到')
   const paddingReplacement = [
     "const bezel = state.landscape ? POCKET_BEZEL.landscape : POCKET_BEZEL.portrait;",
@@ -363,6 +389,9 @@ if (!bridgeSource.includes('function bridgeBannerText')) fail('bridge.js 缺少 
 if (!diagnoseSource.includes('function summarizeProbe')) fail('diagnose.js 缺少 summarizeProbe')
 if (markup.includes('在新窗口打开 H5')) fail('「在新窗口打开」文案未替换')
 if (!markup.includes('需要登录的页面')) fail('帮助弹窗缺少登录说明')
+if (!markup.includes('class="status-time"')) fail('状态栏没有使用标准时间标记')
+if (!markup.includes('viewBox="0 0 18 12"')) fail('状态栏信号图标没有替换')
+if (!appCode.includes('21 * state.battery')) fail('电池填充宽度没有按 iOS 电池内宽调整')
 
 /* ------------------------------------------------------------------ *
  * 4. 内置二维码编码器：vendor/qrcode（node-qrcode 1.5.4 内核，MIT）

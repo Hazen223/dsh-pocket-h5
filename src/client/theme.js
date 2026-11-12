@@ -212,9 +212,9 @@ const PANEL_THEME_CSS = String.raw`
 }
 
 /* ==================================================================
- * 2.5 设备外框：用用户提供的 iPhone 边框图片替代上游 CSS 手绘外框
- *     .phone 仍是上游布局盒（宽高/内边距由 app.js 按边框几何计算），
- *     ::before 只负责画边框，.screen 落在图片的屏幕开口上。
+ * 2.5 设备外框：用边框图片当「手机壳」盖在长方形页面之上
+ *     .screen 是普通矩形（无圆角），边框图片叠在其上方，用不透明的
+ *     内框/圆角遮住页面四角 —— 圆角来自素材本身，不靠 CSS 拟合。
  * ================================================================== */
 .phone {
   background: none !important;
@@ -227,7 +227,7 @@ const PANEL_THEME_CSS = String.raw`
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 5;
   pointer-events: none;
   background-image: var(--p-bezel-image);
   background-repeat: no-repeat;
@@ -245,7 +245,7 @@ const PANEL_THEME_CSS = String.raw`
 }
 .phone .side-key { display: none !important; }
 .phone .screen {
-  border-radius: var(--p-screen-radius);
+  border-radius: 0 !important;
   box-shadow: none !important;
 }
 
@@ -568,6 +568,115 @@ dialog::backdrop { background: var(--p-mask); }
 }
 .help-backdrop { background: var(--p-mask); }
 
+/* ==================================================================
+ * 5.5 iOS 状态栏与底部手势条：按 Apple 标准几何重画
+ *     - 状态栏 62pt 高，内容垂直居中：时间左内边距 54、右侧图标组右内边距 26；
+ *     - 时间 17pt / 600 / 无衬线，数字等宽；
+ *     - 信号 18x12（4 根圆角柱）、Wi-Fi 17x12（3 段弧 + 点）、电池 27x13（25 身 + 2 尖端）；
+ *     - 底部手势条 134x5、圆角 2.5、距底 8pt。
+ * ================================================================== */
+.status-bar {
+  height: 62px;
+  padding: 0 26px 0 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink);
+  background: var(--bar-color);
+  pointer-events: none;
+}
+.status-time {
+  width: auto;
+  min-width: 0;
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  flex: none;
+}
+.status-right svg { stroke: none; fill: currentColor; }
+.signal { width: 18px; height: 12px; }
+.wifi { width: 17px; height: 12px; margin-top: 0; }
+.wifi path { stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; fill: none; }
+.wifi circle { fill: currentColor; }
+.battery {
+  box-sizing: border-box;
+  width: 27px;
+  height: 13px;
+  margin-right: 2px;
+  padding: 2px;
+  border: 1px solid currentColor;
+  border-radius: 4.2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.battery:after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 3.6px;
+  width: 2px;
+  height: 5px;
+  border-radius: 0 2px 2px 0;
+  background: currentColor;
+  opacity: 0.4;
+}
+.battery-fill {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  bottom: 2px;
+  width: 21px;
+  border-radius: 2.4px;
+  background: currentColor;
+  z-index: 0;
+}
+#batteryText {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+}
+.dynamic-island {
+  top: 12px;
+  width: 126px;
+  height: 36px;
+  border-radius: 18px;
+}
+.dynamic-island span {
+  right: 10px;
+  top: 10px;
+  width: 12px;
+  height: 12px;
+}
+.home-area {
+  height: 34px;
+  background: var(--bar-color);
+}
+.home-area > span {
+  width: 134px;
+  height: 5px;
+  border-radius: 2.5px;
+  bottom: 8px;
+  background: var(--ink);
+  opacity: 1;
+}
+.landscape .home-area { height: 21px; }
+.landscape .home-area span { width: 180px; bottom: 7px; }
+
 /* 二维码 / 诊断 / 登录桥 的细节配色（结构由各自片段提供） */
 .qr-dialog .qr-frame { border-color: var(--p-border); background: #ffffff; }
 .qr-dialog .qr-empty { color: var(--p-text-tertiary); }
@@ -620,7 +729,6 @@ function mountPanelTheme(shadow) {
     root.style.setProperty('--p-bezel-image', 'url("' + POCKET_BEZEL_IMAGE + '")')
     root.style.setProperty('--p-bezel-w', POCKET_BEZEL.portrait.outerW + 'px')
     root.style.setProperty('--p-bezel-h', POCKET_BEZEL.portrait.outerH + 'px')
-    root.style.setProperty('--p-screen-radius', POCKET_BEZEL.radius + 'px')
   }
 
   const brandRow = shadow.querySelector('.sidebar-brand')
