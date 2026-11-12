@@ -54,6 +54,9 @@
   `index.js` 代码与桌面端协议实现，未在本会话做桌面窗口内的视觉验证。
 - **新增一项上游没有的能力：手机扫码**（见 §9）。地址栏右侧二维码按钮 → 把当前预览地址渲染成
   离线二维码 → 手机扫码打开；编码器内置于 bundle，不联网、不新增依赖。
+- **新增一项上游没有的能力：登录桥**（见 §14）。Host 起一个只监听 `127.0.0.1` 的反向代理，
+  把 Safari 里已登录的 Cookie（或手动粘贴的 Cookie 头）注入上游请求，iframe 改走代理；
+  需要登录、或原本禁止 iframe 嵌入的页面都能在面板里预览。Cookie 只在 Host 内存，停止/失焦/闲置即释放。
 - **新增一项上游没有的能力：预览诊断**（见 §13）。Host 半新增
   `GET /pocket-h5/probe.json`：受控地请求目标地址（只读响应头、最多 5 次跳转、6 秒超时），
   面板据此区分「站点禁止 iframe 嵌入」「被重定向到登录页 / 401」「服务访问不到」，并给出建议。
@@ -325,7 +328,7 @@ DSH Web GUI（宿主页面）
    `resize` / `pocketdisplaychange` / `pocketproxyresult` 等 window 监听器、toast 与
    loading 定时器、`ResizeObserver`，都在卸载时移除/断开。
 
-3. **系统浏览器登录态无法继承；上游的「应用内弹窗登录」也没有了。**
+3. **系统浏览器登录态无法通过浏览器 API 继承；上游的「应用内弹窗登录」也没有了。**
    面板不能读取 Safari/Chrome 的 Cookie（跨应用 + 系统钥匙串加密），也不应该去读。
    内嵌预览用的是 DSH 应用自己的 Chromium 会话：**在预览里登录一次会保留**（含重启 DSH）。
    但上游 Electron 版能让预览里的 `window.open` 在**同一会话的子窗口**里完成登录并把 Cookie
@@ -547,3 +550,54 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
 - 「在系统浏览器打开」按钮（上游「新窗口打开」改名，`title`/`aria-label` 同步）+
   帮助弹窗新增「需要登录的页面」说明；
 - 构建期约束：不新增 `require`、样式只进 Shadow DOM、卸载时移除按钮/对话框。
+
+## 14. 登录桥（阶段 6 新增）
+
+### 14.1 为什么需要它
+
+内嵌 iframe 跑在 DSH 自己的 Chromium 会话里，没有 Safari/Chrome 的登录 Cookie；而浏览器不允许
+一个页面读取另一个应用的 Cookie。于是「需要登录才能看」的页面在面板里只能看到登录页或空白。
+登录桥把两件事拆开：**读登录态**（本机文件/手动粘贴）和**用登录态**（本机反向代理注入 Cookie），
+从而在不改 DSH、不改浏览器安全模型的前提下，让面板里的预览带上登录态。
+
+### 14.2 结构
+
+- `lib/bridge.js`（Host，纯 Node 内置模块）：
+  - `parseBinaryCookies(buffer)`：Safari `Cookies.binarycookies` 解析（自动识别真实布局与规范布局，
+    校验越界/NUL/UTF-8；expires 从 Cocoa 2001 基准换算为 Unix 秒，0=session）；
+  - `readSafariCookies({path})`：只读 Safari Cookie 文件；EACCES/EPERM →
+    `{ok:false, code:'safari-permission', message:…完全磁盘访问权限…}`；
+  - `filterCookiesForUrl(cookies, url)`：域边界后缀匹配 + path 前缀 + 过期过滤（IP 仅精确匹配）；
+  - `mergeCookieHeader(jar, browserCookieHeader)`：jar 优先，浏览器独有名字保留；
+  - `createBridge({target, cookies, timeoutMs})`：只绑 `127.0.0.1:0`、只连 target origin；注入 Cookie、
+    剥离 `X-Frame-Options`、删除 CSP 的 `frame-ancestors` 指令、改写 `Location`/请求 `origin`/`referer`、
+    把上游 `Set-Cookie` 去掉 `Domain`/`SameSite=None` 后转给浏览器并回灌 jar、body 流式透传、
+    `upgrade` 用 net/tls 隧道转发 WebSocket（注入 Cookie）、502/504 纯文本、幂等 `close()`、
+    live `cookieCount`；无磁盘写入、无日志。
+- `index.js` 路由 `prefix /pocket-h5` 内新增 `GET|POST /pocket-h5/bridge.json`：
+  - GET 返回 `{ok, active, target, entryUrl, proxyUrl, cookieCount, source, importedAt}`（不含 Cookie 值）；
+  - POST `{action:'start'|'refresh'|'stop', target?, cookies?}`：start 默认读 Safari 并过滤，
+    传 `cookies` 则用手动 Cookie 头；refresh 重新读 Safari；stop 关闭代理。
+  - 单一活动桥、闲置 30 分钟自动关闭；插件卸载 disposer 里关闭。
+- `src/client/bridge.js`：「登录桥」按钮 + 对话框（来源、状态、手动粘贴 Cookie 折叠区）+ 顶部
+  「登录桥已启用」状态条 + 「恢复直连」；启用时设置 `window.pocketBridge = {target, entryUrl}`，
+  `navigate()` 对目标地址改加载代理地址（构建期 patch），二维码/诊断/桥接本身都用
+  `pocketPreviewTarget()` 还原成原始目标。
+- 生命周期：面板卸载时停止桥接；`Cookie` 只在 Host 进程内存。
+
+### 14.3 安全与隐私
+
+- 代理只监听回环、只代理启动时指定的 origin（非开放代理）；Cookie 值不写盘、不打印、不出现在
+  bridge.json 状态里。
+- 读取 Safari Cookie 需要用户在「系统设置 → 隐私与安全性 → 完全磁盘访问权限」给 DSH 授权并重启；
+  未授权时返回明确错误并提供「手动粘贴 Cookie」路径。
+- 手动 Cookie 只存在内存，停止/闲置即清空。
+
+### 14.4 已知限制
+
+- 只对 Cookie 认证有效；Bearer/localStorage 登录态不会自动带入。
+- 只代理 target origin：页面里写死指向其它域名（CDN/API）的绝对地址不经过代理，这些请求没有登录态。
+- 面板预览的 origin 变成 `http://127.0.0.1:<代理端口>`：依赖精确 origin/referer 校验的页面需验证；
+  代理已改写请求 origin/referer 与响应 Location 以尽量兼容。
+- 代理剥离 `X-Frame-Options`/`frame-ancestors` 是为了「能在面板里看」，不代表目标站愿意被嵌入；
+  仅用于本机自测。

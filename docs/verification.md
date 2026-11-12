@@ -551,3 +551,72 @@ GET /pocket-h5/probe.json    => 404   （阶段 5 新路由，运行中的 Host 
 2. 重启后桌面 `dsh-app://app` 下 `fetch('/pocket-h5/probe.json')` 的真实链路与面板内结果渲染。
 3. 真实内网站点（X-Frame-Options / SSO 登录）的探测结果与用户侧观感。
 4. 手机扫码与「在系统浏览器打开」在桌面端的实际行为（上一轮遗留）。
+
+---
+
+## 14. 阶段 6（登录桥：Safari Cookie + 本机反向代理）
+
+> 时间：2026-11-12 20:29–21:10（Asia/Shanghai）。触发：用户要求「继承 Safari/Chrome 已登录状态，
+> 在这个 App 里预览」。用户选择「方案 A（本机代理）+ Safari 自动导入」。
+
+### 14.1 结论
+
+- 浏览器没有跨应用读取登录态的 API；Safari Cookie 库受 TCC 保护（本机 DSH 进程读它返回
+  `Operation not permitted`）。因此实现为：**从本机 Cookie 文件（或手动粘贴）取 Cookie，
+  Host 起本机反向代理注入 Cookie，面板 iframe 走代理**——不改 DSH、不改浏览器安全模型。
+- 自动导入需要用户给 DSH 授「完全磁盘访问权限」并重启；未授权时返回可操作错误，并提供
+  「手动粘贴 Cookie」兜底（无需任何权限）。
+
+### 14.2 实现与测试
+
+```text
+lib/bridge.js           946 行，纯 node 内置；无磁盘写入、无 console 日志
+src/client/bridge.js    登录桥按钮/对话框/状态条/恢复直连；pocketPreviewTarget 统一目标解析
+index.js                GET|POST /pocket-h5/bridge.json（start/refresh/stop，单一活动桥，30min 闲置回收）
+build-client.mjs        navigate() 桥感知（目标地址照记，实际加载 entryUrl）；bundle 注入 bridge 片段
+```
+
+```text
+node tests/bridge-unit.mjs   # 27/27 ok
+node tests/host-smoke.mjs    # 30/30 ok（新增 9 项 bridge：状态/启动/注入/XFO 剥离/Set-Cookie 改写/
+                             #   jar 回灌/重定向改写/停止/端口关闭/Safari 权限错误）
+node tests/client-smoke.mjs  # 77/77 ok（新增 15 项：bridgeBannerText/bridgeCanTarget + 产物静态断言）
+node build-client.mjs        # 幂等通过；client.js 196586 B，sha256 632b4447…48b4e（dirty dev 构建）
+```
+
+真实 Safari 读取（本机当前未授权 FDA）：
+
+```text
+{"ok":false,"code":"safari-permission","message":"没有权限读取 Safari Cookie 文件（EPERM）。需要在
+「系统设置 → 隐私与安全性 → 完全磁盘访问权限」里给 DSH 授权后重启 DSH。"}
+```
+
+### 14.3 登录桥行为证据（host-smoke 实跑）
+
+- 手动 Cookie 启动：`cookieCount=2`，`proxyUrl` 为 `http://127.0.0.1:<随机端口>`；
+- 经代理请求 `/bridge-echo`：上游收到 `sid=abc`（注入成功），响应里 `X-Frame-Options` 被剥离、
+  CSP 不含 `frame-ancestors`；
+- `/bridge-set` 的 `Set-Cookie: token=xyz; Path=/; HttpOnly; SameSite=None; Secure` → 代理响应去掉
+  `Domain`/`SameSite=None`，保留 HttpOnly/Secure/Path；随后 `/bridge-next` 由 jar 回灌 `token=xyz`；
+- `/bridge-redirect` 的绝对 `Location` 改写成代理 origin；
+- `POST {action:'stop'}` 后代理端口拒绝连接；
+- WebSocket `upgrade` 隧道注入 Cookie（bridge-unit 用例）。
+
+### 14.4 重启证据（运行中的 Host 仍是旧模块）
+
+```text
+GET /pocket-h5/display.json  => 200
+GET /pocket-h5/probe.json    => 200
+GET /pocket-h5/bridge.json   => 404   （阶段 6 新路由，运行中的 Host 未加载）
+```
+
+→ Host 代码变更不热重载：需**完全退出并重开 DSH**；client.js 刷新 GUI 即可。
+建议顺序：先给 DSH 授「完全磁盘访问权限」，再退出/重开 DSH（一次完成授权生效 + 新 Host 加载）。
+
+### 14.5 未验证项（阶段 6）
+
+1. 登录桥对话框/状态条的实际渲染与交互（无浏览器控制）。
+2. 授权 FDA 并重启后，`readSafariCookies()` 在真实 Host 进程里的读取结果（本机当前是 EPERM）。
+3. 真实目标站点（Cookie 认证、含 X-Frame-Options/SSO）的端到端登录预览。
+4. 页面内绝对跨域地址、WebSocket HMR 在真实 Vite/H5 项目中的表现（单测覆盖隧道，真实站点未验证）。
+5. 手动粘贴 Cookie 的真实浏览器复制流程（DevTools/Copy as cURL）。

@@ -12,6 +12,8 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+import { createBridge, filterCookiesForUrl, readSafariCookies } from './lib/bridge.js'
+
 /** Loader row / sidebar entry id shared with the Client half. */
 export const name = 'pocket-h5'
 
@@ -26,6 +28,10 @@ const DEMO_PATHS = new Set([`${ROUTE_PATH}/demo.html`, `${ROUTE_PATH}/demo`])
 
 /** Host metrics endpoint: display physical size for true-size 100% preview. */
 const DISPLAY_PATH = `${ROUTE_PATH}/display.json`
+
+/** Login bridge endpoint: local reverse proxy + Safari cookie import. */
+const BRIDGE_PATH = `${ROUTE_PATH}/bridge.json`
+const BRIDGE_IDLE_MS = 30 * 60 * 1000
 
 /** Embed diagnosis endpoint: why a preview URL cannot show (framing / login). */
 const PROBE_PATH = `${ROUTE_PATH}/probe.json`
@@ -265,14 +271,176 @@ function sendPlain(res, status, message, method, extraHeaders = {}) {
  * percent-encoding is validated, and traversal segments are rejected. The
  * demo file path is a module-relative constant.
  */
+/* ------------------------------------------------------------------ *
+ * 登录桥：本机反向代理 + Safari 登录态
+ *  - Cookie 只存在于 Host 内存，不写盘、不打印；
+ *  - 代理只监听 127.0.0.1 的随机端口，只转发到启动时指定的 target origin；
+ *  - 面板卸载/停止/闲置 30 分钟时关闭。
+ * ------------------------------------------------------------------ */
+
+/** @type {{bridge: any, target: string, entryUrl: string, source: 'safari'|'manual', importedAt: number} | null} */
+let activeBridge = null
+let bridgeIdleTimer = null
+
+/** JSON 响应（桥接状态、诊断结果共用）。 */
+function sendJson(res, method, payload, status = 200) {
+  const body = JSON.stringify(payload)
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Length': Buffer.byteLength(body),
+  })
+  if (method === 'HEAD') res.end()
+  else res.end(body)
+}
+
+/** 当前桥接状态（不含 Cookie 值）。 */
+function bridgeState() {
+  if (activeBridge === null) return { ok: true, active: false }
+  return {
+    ok: true,
+    active: true,
+    target: activeBridge.target,
+    entryUrl: activeBridge.entryUrl,
+    proxyUrl: activeBridge.bridge.origin,
+    cookieCount: activeBridge.bridge.cookieCount,
+    source: activeBridge.source,
+    importedAt: activeBridge.importedAt,
+  }
+}
+
+/** 关闭桥接（幂等）。 */
+async function stopBridge() {
+  if (bridgeIdleTimer !== null) {
+    clearTimeout(bridgeIdleTimer)
+    bridgeIdleTimer = null
+  }
+  const current = activeBridge
+  activeBridge = null
+  if (current === null) return
+  try {
+    await current.bridge.close()
+  } catch {
+    // 关闭失败不影响调用方：端口最终随进程释放。
+  }
+}
+
+/** 闲置超时自动关闭，避免登录态一直驻留。 */
+function armBridgeIdleTimer() {
+  if (bridgeIdleTimer !== null) clearTimeout(bridgeIdleTimer)
+  bridgeIdleTimer = setTimeout(() => {
+    stopBridge().catch(() => {})
+  }, BRIDGE_IDLE_MS)
+  bridgeIdleTimer.unref?.()
+}
+
+/** 把 `Cookie: a=1; b=2` 解析成目标域下的 cookie。 */
+function parseManualCookies(header, hostname) {
+  const cookies = []
+  for (const part of String(header).split(';')) {
+    const index = part.indexOf('=')
+    if (index <= 0) continue
+    const name = part.slice(0, index).trim()
+    const value = part.slice(index + 1).trim()
+    if (name === '' || /[\s,;]/.test(name)) continue
+    cookies.push({ name, value, domain: hostname, path: '/', secure: false, httpOnly: false, expires: 0 })
+  }
+  return cookies
+}
+
+/**
+ * 启动登录桥：默认从 Safari 读取该站点的 Cookie；也接受手动粘贴的 Cookie 头。
+ * @param {string} targetUrl - 要代理的 http(s) 地址
+ * @param {string} [manualCookieHeader] - 可选：`Cookie` 请求头原文
+ */
+async function startBridge(targetUrl, manualCookieHeader) {
+  let target
+  try {
+    target = new URL(String(targetUrl ?? ''))
+  } catch {
+    return { ok: false, code: 'invalid-url', message: '地址格式有误' }
+  }
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+    return { ok: false, code: 'invalid-protocol', message: '登录桥只支持 http/https 地址' }
+  }
+  if (target.username || target.password) {
+    return { ok: false, code: 'invalid-url', message: '地址不能包含账号密码' }
+  }
+
+  let cookies = []
+  let source = 'safari'
+  let warning = null
+  if (typeof manualCookieHeader === 'string' && manualCookieHeader.trim() !== '') {
+    source = 'manual'
+    cookies = parseManualCookies(manualCookieHeader, target.hostname)
+    if (cookies.length === 0) {
+      return { ok: false, code: 'invalid-cookies', message: 'Cookie 头里没有可解析的 name=value' }
+    }
+  } else {
+    const safari = await readSafariCookies()
+    if (!safari.ok) return safari
+    cookies = filterCookiesForUrl(safari.cookies, target.href)
+    if (cookies.length === 0) {
+      warning = 'Safari 里没有该站点的 Cookie：请先在 Safari 打开该站点并登录，或改用「手动粘贴 Cookie」。'
+    }
+  }
+
+  await stopBridge()
+  const bridge = await createBridge({ target: target.href, cookies })
+  activeBridge = {
+    bridge,
+    target: target.href,
+    entryUrl: bridge.origin + target.pathname + target.search + target.hash,
+    source,
+    importedAt: Date.now(),
+  }
+  armBridgeIdleTimer()
+  const state = bridgeState()
+  if (warning !== null) state.warning = warning
+  return state
+}
+
+/** 重新从 Safari 导入 Cookie（切换账号/重新登录后用）。 */
+async function refreshBridge() {
+  if (activeBridge === null) return { ok: false, code: 'bridge-inactive', message: '登录桥未启用' }
+  const safari = await readSafariCookies()
+  if (!safari.ok) return safari
+  const cookies = filterCookiesForUrl(safari.cookies, activeBridge.target)
+  activeBridge.bridge.setCookies(cookies)
+  activeBridge.importedAt = Date.now()
+  armBridgeIdleTimer()
+  const state = bridgeState()
+  if (cookies.length === 0) state.warning = 'Safari 里没有该站点的 Cookie，桥接仍然启用但不会携带登录态。'
+  return state
+}
+
+/** 读取 JSON 请求体（限制 64 KiB；测试里的假 req 可以直接给 `body` 字符串）。 */
+async function readJsonBody(req, limit = 64 * 1024) {
+  let text = ''
+  if (typeof req?.body === 'string') {
+    text = req.body
+  } else if (req !== null && typeof req === 'object' && typeof req[Symbol.asyncIterator] === 'function') {
+    const chunks = []
+    let size = 0
+    for await (const chunk of req) {
+      size += chunk.length
+      if (size > limit) throw new Error('body-too-large')
+      chunks.push(chunk)
+    }
+    text = Buffer.concat(chunks).toString('utf8')
+  }
+  text = text.trim()
+  if (text === '') return {}
+  const parsed = JSON.parse(text)
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('body-invalid')
+  return parsed
+}
+
 async function handler(req, res) {
   let method = 'GET'
   try {
     method = String(req.method ?? 'GET').toUpperCase()
-    if (method !== 'GET' && method !== 'HEAD') {
-      sendPlain(res, 405, 'Method Not Allowed', method, { Allow: 'GET, HEAD' })
-      return
-    }
 
     let pathname
     try {
@@ -285,6 +453,13 @@ async function handler(req, res) {
       return
     }
 
+    const bridgePost = method === 'POST' && pathname === BRIDGE_PATH
+    if (method !== 'GET' && method !== 'HEAD' && !bridgePost) {
+      const allow = pathname === BRIDGE_PATH ? 'GET, HEAD, POST' : 'GET, HEAD'
+      sendPlain(res, 405, 'Method Not Allowed', method, { Allow: allow })
+      return
+    }
+
     // NUL, backslashes and `..` segments are never part of an allowed route.
     if (
       pathname.includes('\0') ||
@@ -292,6 +467,34 @@ async function handler(req, res) {
       /(^|\/)\.\.(\/|$)/.test(pathname)
     ) {
       sendPlain(res, 400, 'Bad Request', method)
+      return
+    }
+
+    if (pathname === BRIDGE_PATH) {
+      if (method !== 'POST') {
+        sendJson(res, method, bridgeState())
+        return
+      }
+      let body
+      try {
+        body = await readJsonBody(req)
+      } catch {
+        sendPlain(res, 400, 'Bad Request', method)
+        return
+      }
+      const action = typeof body.action === 'string' ? body.action : ''
+      let result
+      if (action === 'start') {
+        result = await startBridge(body.target, body.cookies)
+      } else if (action === 'refresh') {
+        result = await refreshBridge()
+      } else if (action === 'stop') {
+        await stopBridge()
+        result = bridgeState()
+      } else {
+        result = { ok: false, code: 'invalid-action', message: '未知操作（start / refresh / stop）' }
+      }
+      sendJson(res, method, result)
       return
     }
 
@@ -364,8 +567,14 @@ async function handler(req, res) {
  */
 export function apply(ctx) {
   const route = { kind: 'prefix', path: ROUTE_PATH, handler }
+  ctx.effect(
+    () => () => {
+      stopBridge().catch(() => {})
+    },
+    'pocket-h5: login bridge',
+  )
   return ctx.effect(
     () => ctx.webServer.register(route),
-    'pocket-h5: demo page route',
+    'pocket-h5: routes',
   )
 }

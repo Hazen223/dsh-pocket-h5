@@ -3,8 +3,9 @@
 把独立的 **Pocket · H5 预览工作台**（上游 Electron / 浏览器版）复用为 DeepSeek Harness Web UI 里的一个
 插件面板：左侧栏「Pocket H5」入口 + 主面板里的整套工作台（iPhone 17 尺寸、状态栏/灵动岛/安全区、
 横竖屏、画布缩放与真机物理尺寸校准），并补了两个上游没有的入口：**手机扫码**（把当前预览地址
-生成二维码，真机扫一下就能打开）和**预览诊断**（页面打不开时，直接告诉你「站点禁止被嵌入」还是
-「被跳转到登录页」，以及登录态为什么不能照搬系统浏览器）。
+生成二维码，真机扫一下就能打开）、**预览诊断**（页面打不开时，直接告诉你「站点禁止被嵌入」还是
+「被跳转到登录页」）和**登录桥**（把 Safari 里已登录的 Cookie 经本机代理注入预览，需要登录的页面
+也能在手机框里看）。
 
 - 上游来源与版本：`ui/PROVENANCE.md`（`index.html` 144 行 / `styles.css` 1000 行 / `app.js` 323 行 / `demo.html` 原样快照）
 - 复用与宿主适配说明：`docs/adaptation.md`
@@ -22,12 +23,15 @@ dsh-pocket-h5/
 ├── src/client/panel.js   # 面板外壳：Shadow DOM 挂载 + 槽位注册 + 侧栏图标 + Host 显示器尺寸回填
 ├── src/client/qr.js      # 新增能力：地址栏二维码按钮 + 手机扫码对话框
 ├── src/client/diagnose.js # 新增能力：「诊断」按钮 + 嵌入/登录原因诊断对话框
+├── src/client/bridge.js  # 新增能力：「登录桥」按钮 + 登录态代理对话框/状态条
+├── lib/bridge.js         # Host 登录桥：Safari binarycookies 解析 + 本机反向代理
 ├── ui/                   # 上游原样快照（复用源，不手改）
 ├── vendor/qrcode/        # 离线二维码编码器（node-qrcode 1.5.4 内核，MIT；PROVENANCE.md + LICENSE）
 ├── locale/{zh,en}.json   # 插件管理页显示的名称与描述
 ├── icon.svg              # 插件图标（复用上游手机图形）
-├── tests/host-smoke.mjs  # Host 路由冒烟测试（21 项：demo/display/probe + 方法/HEAD/穿越边界）
-├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（62 项：factory/槽位/二维码/尺寸匹配/诊断摘要）
+├── tests/host-smoke.mjs  # Host 冒烟测试（30 项：demo/display/probe/bridge + 方法/HEAD/穿越边界）
+├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（77 项：factory/槽位/二维码/尺寸/诊断/登录桥）
+├── tests/bridge-unit.mjs # 登录桥单测（27 项：Cookie 解析/过滤/代理注入/头部改写/隧道）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
 
@@ -39,6 +43,10 @@ dsh-pocket-h5/
 - **预览**：仍是 `<iframe id="previewFrame">`，输入端口 / `localhost:3000/path` / 完整 HTTP(S) 地址即可。
 - **内置示例**：`ui/demo.html` 由 Host 半通过同源路由 `/pocket-h5/demo.html` 提供。
 - **持久化**：外观、最近地址、显示器校准仍写在 `localStorage('pocket-h5-v1')`（宿主同源）。
+- **登录桥（新增）**：预览地址旁的「登录桥」按钮。Host 起一个只监听 `127.0.0.1` 的反向代理，
+  把从 Safari 读取的该站点 Cookie 注入上游请求，iframe 改走代理 → 需要登录的页面在面板里也能打开。
+  Cookie 只在 Host 内存中；停止桥接、切换面板或闲置 30 分钟后释放。读 Safari Cookie 需要
+  「完全磁盘访问权限」；也支持手动粘贴 Cookie 头（不需要任何系统权限）。
 - **预览诊断（新增）**：预览地址旁的「诊断」按钮。Host 半请求目标地址（只读响应头、不跟随无限跳转、
   6 秒超时），面板直接给出结论：`X-Frame-Options` / CSP `frame-ancestors` 是否禁止嵌入、是否被重定向到
   登录页（或 401/403）、服务是否根本访问不到，并给出下一步建议。
@@ -74,8 +82,9 @@ node build-client.mjs
 验证命令：
 
 ```sh
-node tests/host-smoke.mjs     # 21 项：demo/display/probe 路由、方法、HEAD、穿越与编码边界、登录/嵌入判定
-node tests/client-smoke.mjs   # 62 项：loader/factory、两处槽位、二维码内核与 vendor 逐位一致、显示器匹配、诊断摘要
+node tests/host-smoke.mjs     # 30 项：demo/display/probe/bridge 路由、方法、HEAD、穿越、Cookie 注入与错误边界
+node tests/client-smoke.mjs   # 77 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手
+node tests/bridge-unit.mjs    # 27 项：Safari binarycookies、域名/路径过滤、代理注入、Set-Cookie/Location 改写、隧道
 ```
 
 ## 安装 / 打开
@@ -98,18 +107,37 @@ node build-client.mjs      # 重新生成 client.js
 
 打开方式：左侧栏点击 **Pocket H5**；输入 H5 开发服务地址，点击「打开预览」。
 
-## 登录态与嵌入（为什么不直接继承系统浏览器登录态）
+## 登录态与登录桥（在面板里用 Safari 的登录状态）
 
-- **预览用的是 DSH 应用自己的 Chromium 会话**（持久 Cookie 库在 `~/.dsh/electron-user-data/`）：
-  在预览里登录一次，之后（含重启 DSH）一般仍在。
-- **不能读取 Safari / Chrome 的登录态**：Cookie 属于各自应用、由系统钥匙串加密，插件/宿主没有合法的
-  跨应用读取入口；这是浏览器安全边界，本插件也不做。
-- **「在系统浏览器打开」**：地址栏右侧按钮实际由 DSH 桌面端 `shell.openExternal` 交给系统默认浏览器，
-  用的是系统浏览器的登录态——但页面不在手机框里，只用于验证站点/完成登录。
-- **上游 Electron 版 vs 面板**：上游能创建同会话子窗口处理弹窗登录并把 Cookie 回传给预览；DSH 桌面端
-  会把 `window.open` 交给系统浏览器，因此「弹窗式登录 / 第三方 SSO」在预览里无法完成。需要这类登录时，
-  用系统浏览器或手机扫码；或者在 H5 开发侧放开 `frame-ancestors` 并改成不依赖弹窗的登录。
-- 不确定原因时，点面板里的「诊断」：它会区分「站点禁止嵌入」「被跳转到登录页」「服务访问不到」。
+### 能做什么
+
+- **登录桥**：面板里的「登录桥」按钮。Host 起一个只监听 `127.0.0.1` 的随机端口反向代理，
+  把 Safari 里该站点的 Cookie 注入发往目标站的请求；iframe 改走代理，所以原本需要登录的页面
+  在手机框里也能显示。代理同时会剥离 `X-Frame-Options` / CSP `frame-ancestors`，让「禁止被嵌入」
+  的站点也能看。
+- **Cookie 来源**：
+  - 自动：从 Safari 的 Cookie 库读取（首次需要给 DSH 授「完全磁盘访问权限」）；
+  - 手动：在登录桥对话框里粘贴 `Cookie` 请求头（例如 DevTools 里任意请求的 `Cookie:` 或
+    「Copy as cURL」里的 `-H 'Cookie: …'`），不需要任何系统权限。
+- **边界**：Cookie 只存在 Host 内存、不写盘、不打印；停止桥接 / 切换面板 / 闲置 30 分钟即释放；
+  只对 Cookie 认证有效（密码、扫码、OAuth 弹窗仍需在预览里完成或走系统浏览器）。
+
+### 使用步骤
+
+1. 在 Safari（或 Chrome）里正常登录目标站点；
+2. 打开面板 → 输入并打开该站点地址 → 点「登录桥」→「从 Safari 导入并开启桥接」；
+3. 顶部出现「登录桥已启用」状态条即生效；「恢复直连」回到不带登录态的直接预览；
+4. 如果读不到 Safari Cookie：按提示到「系统设置 → 隐私与安全性 → 完全磁盘访问权限」添加
+   `DSH NEXT` 并打开开关，**退出并重开 DSH**；或直接用「手动粘贴 Cookie」。
+
+### 为什么不能「直接继承」系统浏览器登录态
+
+- Safari/Chrome 的 Cookie 属于各自应用、由系统钥匙串加密，插件与 Host 没有合法的跨应用 API；
+  登录桥是在这个约束下用「读本机 Cookie + 本机代理」绕出的可用路径，不是浏览器原生能力。
+- 内嵌预览本身没有自己的浏览器配置目录，登录桥启用前它用的是 DSH 应用的 Chromium 会话
+  （在预览里登录一次也会保留）。
+- **上游 Electron 版 vs 面板**：上游能创建同会话子窗口处理弹窗登录并回传 Cookie；DSH 桌面端会把
+  `window.open` 交给系统浏览器。弹窗式登录请用「在系统浏览器打开」或手机扫码。
 
 ## 已知限制
 
@@ -126,6 +154,10 @@ node build-client.mjs      # 重新生成 client.js
 - 显示器尺寸探测失败时不会清掉上一次的探测值（多屏切换后若新屏探测失败，可能暂时沿用旧屏密度）；
   在同尺寸的两块屏之间移动窗口可能不触发 resize 重取——可切换一次面板或改一下窗口大小来刷新。
 - macOS 之外的平台没有 CoreGraphics 探测，`100%` 仍按 96 CSS px/英寸估算，需要尺子校准一次。
+- **登录桥只代理一个 target origin**：页面里写死的绝对地址（指向其它域名/CDN）不会经过代理，
+  这些请求没有登录态；只带 Cookie 认证，Bearer/localStorage 类的登录态不会自动带入。
+- **登录桥改变页面 origin**（`http://127.0.0.1:<代理端口>`）：依赖 `location.origin` 或精确
+  `referer` 校验的页面可能需要验证；代理会改写请求的 origin/referer 与响应的 Location 以尽量兼容。
 
 ## 版本与发布
 

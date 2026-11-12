@@ -40,7 +40,7 @@ const windowStub = {
     },
   },
 }
-runInNewContext(await readFile(bundlePath, 'utf8'), { window: windowStub, console, TextEncoder, TextDecoder })
+runInNewContext(await readFile(bundlePath, 'utf8'), { window: windowStub, console, TextEncoder, TextDecoder, URL, URLSearchParams })
 
 check(definition !== null, 'bundle calls window.__ModuleLoader__.load()')
 check(definition?.id === pkg.name, `factory id equals package name (${pkg.name})`)
@@ -240,7 +240,26 @@ if (typeof summarize === 'function') {
   check(empty.tone === 'error' && empty.title.includes('没有完成'), 'diagnosis: missing payload is handled')
 }
 
-/* ---- 7. generated assets are present and plausible ---- */
+/* ---- 7. login bridge helpers (pure) + bundled wiring ---- */
+const bridgeBannerText = qrTest.bridgeBannerText
+const bridgeCanTarget = qrTest.bridgeCanTarget
+check(typeof bridgeBannerText === 'function', 'client exposes bridge banner text for smoke tests')
+check(typeof bridgeCanTarget === 'function', 'client exposes bridge target guard for smoke tests')
+
+if (typeof bridgeBannerText === 'function' && typeof bridgeCanTarget === 'function') {
+  check(bridgeBannerText(null) === '登录桥未启用', 'bridge: inactive banner text')
+  const activeText = bridgeBannerText({ active: true, source: 'safari', cookieCount: 12 })
+  check(activeText.includes('Safari') && activeText.includes('12'), 'bridge: safari banner reports cookie count')
+  const manualText = bridgeBannerText({ active: true, source: 'manual', cookieCount: 3 })
+  check(manualText.includes('手动 Cookie'), 'bridge: manual banner names the source')
+  check(bridgeCanTarget('http://127.0.0.1:5173/app') === true, 'bridge: http target accepted')
+  check(bridgeCanTarget('https://example.com/') === true, 'bridge: https target accepted')
+  check(bridgeCanTarget('dsh-app://app/pocket-h5/demo.html') === false, 'bridge: dsh-app target rejected')
+  check(bridgeCanTarget('about:blank') === false, 'bridge: about:blank rejected')
+  check(bridgeCanTarget('') === false, 'bridge: empty target rejected')
+}
+
+/* ---- 8. generated assets are present and plausible ---- */
 const source = await readFile(bundlePath, 'utf8')
 check(source.includes(':host {'), 'generated CSS carries the :host scope')
 check(source.includes('data-pocket-h5-style'), 'panel injects its own shadow-root style tag')
@@ -256,6 +275,11 @@ check(source.includes('id = \'diagnoseButton\''), 'diagnosis button is created i
 check(source.includes('summarizeProbe'), 'diagnosis summarizer is bundled')
 check(source.includes('在系统浏览器打开 H5'), 'external-open button names the system browser')
 check(source.includes('需要登录的页面'), 'help dialog explains login and framing limits')
+check(source.includes("button.id = 'bridgeButton'"), 'login-bridge button is created in the panel')
+check(source.includes('bridgeBanner'), 'login-bridge banner is bundled')
+check(source.includes('function pocketPreviewTarget'), 'bridged preview resolves back to the real target')
+check(source.includes('window.pocketBridge'), 'navigation is bridge-aware (refresh keeps the proxy)')
+check(source.includes('完全磁盘访问'), 'permission guidance for Safari cookies is included')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

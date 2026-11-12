@@ -114,8 +114,7 @@ function mountQrFeature(shadow) {
   const hint = shadow.getElementById('qrHint')
 
   const open = function () {
-    const preview = shadow.getElementById('previewFrame')
-    const source = preview && preview.getAttribute('src') ? preview.getAttribute('src') : ''
+    const source = pocketPreviewTarget(shadow)
     const demoUrl = pocketDemoUrl()
     let url = ''
     let problem = ''

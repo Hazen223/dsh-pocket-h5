@@ -168,8 +168,7 @@ function mountDiagnoseFeature(shadow) {
   }
 
   const run = async function () {
-    const preview = shadow.getElementById('previewFrame')
-    const source = preview && preview.getAttribute('src') ? preview.getAttribute('src') : ''
+    const source = pocketPreviewTarget(shadow)
     const demoUrl = pocketDemoUrl()
     if (!source || source === 'about:blank' || source === demoUrl || source.indexOf('dsh-app:') === 0) {
       renderSummary({

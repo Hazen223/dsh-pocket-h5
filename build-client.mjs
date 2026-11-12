@@ -244,6 +244,14 @@ function buildApp(source) {
   if (!code.includes(queryLine)) fail('app.js 的 ?url= 读取行未找到')
   code = code.split(queryLine).join('const requested = saved.url;')
 
+  // 登录桥启用时，navigate 仍记录原始目标地址，但实际加载代理地址；
+  // 这样刷新按钮、示例按钮、地址栏语义都保持「目标地址」。
+  const frameSrcLine = "$('previewFrame').src = url;"
+  if (count(code, frameSrcLine) !== 1) fail('app.js 的 iframe src 赋值行数量异常：' + count(code, frameSrcLine))
+  code = code.split(frameSrcLine).join(
+    "const bridged = window.pocketBridge && window.pocketBridge.target === url ? window.pocketBridge.entryUrl : null;\n  $('previewFrame').src = bridged || url;",
+  )
+
   const createElementCount = count(code, 'document.createElement(')
   if (createElementCount !== 1) fail('document.createElement 出现 ' + createElementCount + ' 次（预期 1 次，用于 datalist option）')
   code = code.split('document.createElement(').join('realDocument.createElement(')
@@ -288,6 +296,7 @@ const appSource = await read('ui/app.js')
 const panelSource = await read('src/client/panel.js')
 const qrSource = await read('src/client/qr.js')
 const diagnoseSource = await read('src/client/diagnose.js')
+const bridgeSource = await read('src/client/bridge.js')
 
 const markup = buildMarkup(html)
 const css = buildCss(cssSource)
@@ -309,7 +318,11 @@ if (!qrSource.includes('function mountQrFeature')) fail('qr.js 缺少 mountQrFea
 if (!qrSource.includes('createQrMatrix')) fail('qr.js 没有使用打包的二维码内核')
 if (!panelSource.includes('applyHostDisplayMetrics')) fail('面板片段没有接 Host 的显示器物理尺寸')
 if (!panelSource.includes('mountDiagnoseFeature(shadow)')) fail('面板片段没有挂载诊断入口')
-if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS')) fail('面板片段没有注入诊断样式')
+if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS')) fail('面板片段没有注入登录桥样式')
+if (!panelSource.includes('mountBridgeFeature(shadow)')) fail('面板片段没有挂载登录桥')
+if (!panelSource.includes('function pocketPreviewTarget')) fail('面板片段缺少登录桥目标解析')
+if (!bridgeSource.includes('function mountBridgeFeature')) fail('bridge.js 缺少 mountBridgeFeature')
+if (!bridgeSource.includes('function bridgeBannerText')) fail('bridge.js 缺少 bridgeBannerText')
 if (!diagnoseSource.includes('function summarizeProbe')) fail('diagnose.js 缺少 summarizeProbe')
 if (markup.includes('在新窗口打开 H5')) fail('「在新窗口打开」文案未替换')
 if (!markup.includes('需要登录的页面')) fail('帮助弹窗缺少登录说明')
@@ -442,6 +455,8 @@ const bundle = [
   '',
   indent(diagnoseSource, 4),
   '',
+  indent(bridgeSource, 4),
+  '',
   indent(panelSource, 4),
   '',
   '    return {',
@@ -449,7 +464,7 @@ const bundle = [
   '      apply: pocketApply,',
   '      version: POCKET_H5_VERSION,',
   '      // 离线冒烟测试入口（tests/client-smoke.mjs 使用；渲染不读取）。',
-  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe },',
+  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe, bridgeBannerText: bridgeBannerText, bridgeCanTarget: bridgeCanTarget },',
   '    };',
   '  },',
   '});',
