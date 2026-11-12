@@ -84,9 +84,17 @@ const PANEL_THEME_CSS = String.raw`
 .ph-brand {
   display: flex;
   align-items: center;
+  flex-direction: row;
   gap: 9px;
   flex: none;
   min-width: 0;
+}
+.ph-brand .brand {
+  display: flex;
+  align-items: center;
+  flex-direction: row !important;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .ph-brand .brand {
   gap: 8px;
@@ -107,14 +115,27 @@ const PANEL_THEME_CSS = String.raw`
 .ph-brand .brand-mark svg { width: 16px; height: 16px; }
 .ph-brand .brand-dot { color: var(--p-text-tertiary); }
 .ph-brand .brand-sub {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--p-surface-2);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  color: var(--p-text-dim);
+  display: none;
 }
 .ph-spacer { flex: 1 1 auto; min-width: 8px; }
+.ph-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+}
+.ph-right .preview-meta {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+.ph-right .ph-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+}
 .ph-actions {
   display: flex;
   align-items: center;
@@ -126,7 +147,7 @@ const PANEL_THEME_CSS = String.raw`
 /* 顶栏里的当前页面 + 小按钮（原 .preview-meta） */
 .ph-topbar .preview-meta {
   margin: 0;
-  padding: 0 2px;
+  padding: 0;
   gap: 6px;
   font-size: 11.5px;
   color: var(--p-text-tertiary);
@@ -782,16 +803,20 @@ dialog::backdrop { background: var(--p-mask); }
 /* ==================================================================
  * 6. 窄窗口
  * ================================================================== */
+@media (max-width: 1180px) {
+  .ph-topbar .preview-meta > #previewName { max-width: 170px; }
+  .ph-topbar #loadStatus { max-width: 210px; }
+}
 @media (max-width: 1080px) {
   .workspace.ph-workspace { grid-template-columns: 272px minmax(0, 1fr); }
-  .ph-topbar .preview-meta > #previewName { max-width: 150px; }
-  .ph-topbar #loadStatus { max-width: 200px; }
+  .ph-topbar .preview-meta > #previewName { max-width: 130px; }
+  .ph-topbar #loadStatus { max-width: 170px; }
 }
-@media (max-width: 860px) {
+@media (max-width: 920px) {
   .workspace.ph-workspace { grid-template-columns: 244px minmax(0, 1fr); padding: 0 10px 10px; gap: 0 10px; }
-  .ph-brand .brand-sub { display: none; }
+  .ph-brand .brand { font-size: 13.5px; }
   .ph-topbar .preview-meta { display: none; }
-  .ph-topbar #loadStatus { max-width: 150px; }
+  .ph-topbar #loadStatus { max-width: 130px; }
 }
 `
 
@@ -832,7 +857,6 @@ function mountPanelTheme(shadow) {
   if (mark) brand.append(mark)
   if (sub) brand.append(sub)
   header.append(brand)
-  if (meta) header.append(meta)
   const spacer = document.createElement('div')
   spacer.className = 'ph-spacer'
   header.append(spacer)
@@ -841,7 +865,12 @@ function mountPanelTheme(shadow) {
   if (status) actions.append(status)
   if (refresh) actions.append(refresh)
   if (external) actions.append(external)
-  header.append(actions)
+  // 右边界对齐：网址（含 示例/登录桥/诊断）→ 状态 → 窗口动作
+  const right = document.createElement('div')
+  right.className = 'ph-right'
+  if (meta) right.append(meta)
+  right.append(actions)
+  header.append(right)
 
   workspace.insertBefore(header, workspace.firstChild)
   workspace.classList.add('ph-workspace')

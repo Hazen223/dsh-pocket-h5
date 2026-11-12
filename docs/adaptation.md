@@ -675,7 +675,19 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
 - 投影从边框伪元素移到 `.device-slot` 的 `filter: drop-shadow(...)`，否则会被剪影裁掉；
 - 剪影两张合计约 2.5 KiB，构建期内联。
 
-### 15.6 说明文字收进 ? 提示（阶段 10 补充）
+### 15.6 顶栏重排（阶段 12 补充）
+
+截图里的顶栏有两个问题：`.brand` 从 `.sidebar-brand` 移出后失去了 `display:flex`，里面的
+`.brand-mark`（`display:grid`，块级）把名称挤到下一行；「H5 预览」副标签也混在品牌和网址之间。
+
+- `.ph-brand .brand` 强制 `display:flex; flex-direction:row; nowrap`，图标 + 名称同一行；
+- 隐藏多余副标签 `.brand-sub`；
+- 头部改成「品牌 → spacer → 右组」：右组 `.ph-right` 内依次放 `.preview-meta`（网址 +
+  示例/登录桥/诊断按钮）与 `.ph-actions`（状态胶囊 + 刷新/在系统浏览器打开），
+  `margin-left:auto` 保证整组贴着右边界；
+- 窄窗口断点：1180/1080/920px 依次收缩网址宽度，920px 以下隐藏网址只留状态与动作。
+
+### 15.7 说明文字收进 ? 提示（阶段 10 补充）
 
 原则：*Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.*
 

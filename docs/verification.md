@@ -850,3 +850,34 @@ node tests/bridge-unit.mjs   # 27/27 ok
 3. 若需要「完全官方」的状态栏图标：SF Symbols 资源不能随公共仓库分发；如用户从 Apple 设计资源
    导出官方 SVG，可直接替换构建里的三个图标路径。
 4. 仅 client.js 变更：刷新 GUI 即可。
+
+---
+
+## 20. 阶段 12（顶栏重排：左品牌、右网址与按钮）
+
+> 触发：用户截图指出顶栏排列混乱（图标与名称上下堆叠、副标签夹在中间、网址/按钮不在右侧边界）。
+
+### 20.1 原因
+
+`.brand` 从上游 `.sidebar-brand` 移出后，`sidebar-brand .brand` 的 `display:flex` 不再命中，
+`.brand-mark`（`display:grid`）是块级，名称被挤到下一行；同时 `.brand-sub`（H5 预览）与
+`.preview-meta` 都在 spacer 左边。
+
+### 20.2 修复
+
+- `.ph-brand .brand { display:flex; flex-direction:row; nowrap; }`，图标 + 「Pocket」同一行；
+- `.brand-sub` 隐藏（不再需要副标签）；
+- 头部结构：`brand` → `spacer` → `.ph-right`（`.preview-meta` + `.ph-actions`），
+  `.ph-right { margin-left:auto; justify-content:flex-end }`；网址、示例/登录桥/诊断、状态、
+  刷新/在系统浏览器打开全部贴右边界；
+- 1180/1080/920px 断点依次压缩网址宽度，920px 以下隐藏网址。
+
+### 20.3 验证
+
+```text
+node build-client.mjs        # 幂等；client.js 323,639 B（sha256 905223de…）
+node --check client.js       # ok
+node tests/host-smoke.mjs    # 30/30 ok
+node tests/client-smoke.mjs  # 110/110 ok（新增右组/品牌同行/副标签隐藏断言）
+node tests/bridge-unit.mjs   # 27/27 ok
+```

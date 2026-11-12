@@ -317,6 +317,9 @@ check(source.includes('--p-bezel-mask'), 'rectangular page is clipped to the bez
 check(source.includes('POCKET_BEZEL_MASK_LANDSCAPE'), 'landscape silhouette is bundled too')
 check(source.includes('mask-size: 100% 100%'), 'silhouette mask is stretched to the phone box')
 check(source.includes('SF Pro Text'), 'status bar text uses the SF Pro system font stack')
+check(source.includes('ph-right'), 'top bar groups URL + actions on the right edge')
+check(source.includes('flex-direction: row !important'), 'brand mark and name stay on one row')
+check(source.includes('.ph-brand .brand-sub'), 'the redundant H5 preview pill is hidden')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)
