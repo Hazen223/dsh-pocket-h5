@@ -5,7 +5,8 @@
 横竖屏、画布缩放与真机物理尺寸校准），并补了两个上游没有的入口：**手机扫码**（把当前预览地址
 生成二维码，真机扫一下就能打开）、**预览诊断**（页面打不开时，直接告诉你「站点禁止被嵌入」还是
 「被跳转到登录页」）和**登录桥**（把 Safari 里已登录的 Cookie 经本机代理注入预览，需要登录的页面
-也能在手机框里看）。
+也能在手机框里看）。界面重排为 FlowPilot 风格的工作台（顶栏 + 左侧设置卡 + 右侧画布卡），
+并跟随 DSH 主题自动切换浅色/黑暗模式。
 
 - 上游来源与版本：`ui/PROVENANCE.md`（`index.html` 144 行 / `styles.css` 1000 行 / `app.js` 323 行 / `demo.html` 原样快照）
 - 复用与宿主适配说明：`docs/adaptation.md`
@@ -24,13 +25,14 @@ dsh-pocket-h5/
 ├── src/client/qr.js      # 新增能力：地址栏二维码按钮 + 手机扫码对话框
 ├── src/client/diagnose.js # 新增能力：「诊断」按钮 + 嵌入/登录原因诊断对话框
 ├── src/client/bridge.js  # 新增能力：「登录桥」按钮 + 登录态代理对话框/状态条
+├── src/client/theme.js   # 外观层：FlowPilot 风格骨架 + light-dark() 明暗令牌
 ├── lib/bridge.js         # Host 登录桥：Safari binarycookies 解析 + 本机反向代理
 ├── ui/                   # 上游原样快照（复用源，不手改）
 ├── vendor/qrcode/        # 离线二维码编码器（node-qrcode 1.5.4 内核，MIT；PROVENANCE.md + LICENSE）
 ├── locale/{zh,en}.json   # 插件管理页显示的名称与描述
 ├── icon.svg              # 插件图标（复用上游手机图形）
 ├── tests/host-smoke.mjs  # Host 冒烟测试（30 项：demo/display/probe/bridge + 方法/HEAD/穿越边界）
-├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（77 项：factory/槽位/二维码/尺寸/诊断/登录桥）
+├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（82 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层）
 ├── tests/bridge-unit.mjs # 登录桥单测（27 项：Cookie 解析/过滤/代理注入/头部改写/隧道）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
@@ -83,7 +85,7 @@ node build-client.mjs
 
 ```sh
 node tests/host-smoke.mjs     # 30 项：demo/display/probe/bridge 路由、方法、HEAD、穿越、Cookie 注入与错误边界
-node tests/client-smoke.mjs   # 77 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手
+node tests/client-smoke.mjs   # 82 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层
 node tests/bridge-unit.mjs    # 27 项：Safari binarycookies、域名/路径过滤、代理注入、Set-Cookie/Location 改写、隧道
 ```
 
@@ -106,6 +108,21 @@ node build-client.mjs      # 重新生成 client.js
 需要重启 DSH 进程——运行中的 Host 不会热重载，`plugin_manager` 会返回 `restart-required`）。
 
 打开方式：左侧栏点击 **Pocket H5**；输入 H5 开发服务地址，点击「打开预览」。
+
+## 外观与黑暗模式
+
+界面重排为 FlowPilot 风格的工作台（`src/client/theme.js`）：
+
+- **48px 顶栏**：品牌 + 当前页面 + 预览状态 + 刷新 / 在系统浏览器打开；二维码、诊断、登录桥按钮
+  也收在顶栏的当前页面旁边（原来的侧栏小按钮区）。
+- **左侧设置卡**：预览地址、显示与尺寸、模拟设备、系统外观、页面布局分组展示；分组标题是小号
+  加字距灰字，控件统一 34–36px 高的无描边面层，主按钮为黑/白反色（跟随主题）。
+- **右侧画布卡**：点阵背景 + 手机预览，卡片 12px 圆角 + 1px 边界。
+- **黑暗模式**：所有颜色用 `light-dark()` 成对声明（`--p-*` 令牌），跟随 DSH 的 `color-scheme`
+  自动切换，不需要单独开关；在 DSH 设置里切到深色主题即可看到。设备外框/状态栏保持中性灰，
+  不参与主题映射（它们是「被预览的手机」，不是面板 chrome）。
+- 上游 `ui/styles.css` 仍是基础层（手机几何、控件结构），外观层在其后覆盖；所有上游 id 与事件
+  绑定保持不变，顶栏只是把品牌/页面/状态/刷新/新窗口节点移动到新的 header 里。
 
 ## 登录态与登录桥（在面板里用 Safari 的登录状态）
 
@@ -141,7 +158,9 @@ node build-client.mjs      # 重新生成 client.js
 
 ## 已知限制
 
-- 面板界面沿用上游中文文案，未接入 DSH locale；工作台保留自身黑白灰浅色视觉，不随宿主深浅色切换。
+- 面板界面沿用上游中文文案，未接入 DSH locale。
+- **视觉层**：面板跟随 DSH 的主题（浅色/黑暗）自动切换，不单独提供主题开关；设备预览里的
+  状态栏背景/文字颜色仍是工作台自己的设置项，不随宿主主题变化。
 - 目标 H5 若设置 `X-Frame-Options` / CSP `frame-ancestors` 会空白（与上游一致，工具不绕过站点限制）。
 - 桌面端页面 origin 是 `dsh-app://app`（安全上下文），预览非 loopback 的 `http://` 地址可能被浏览器按
   混合内容拦截；`127.0.0.1` / `localhost` 不受影响（被视为可信来源）。跨设备请在 H5 侧用 HTTPS，或在浏览器版

@@ -160,7 +160,7 @@ function buildCss(source) {
   }
 
   replaceAll(':root {', ':host {')
-  replaceAll(':host {\n  font-family:', ':host {\n  color-scheme: light;\n  font-family:')
+  // 不再强制 light：面板用 light-dark() 跟随宿主的 color-scheme（黑暗模式）。
   replaceAll(
     'body { margin: 0; overflow: hidden; }',
     ':host {\n  display: block;\n  height: 100%;\n  margin: 0;\n  overflow: hidden;\n}',
@@ -297,6 +297,7 @@ const panelSource = await read('src/client/panel.js')
 const qrSource = await read('src/client/qr.js')
 const diagnoseSource = await read('src/client/diagnose.js')
 const bridgeSource = await read('src/client/bridge.js')
+const themeSource = await read('src/client/theme.js')
 
 const markup = buildMarkup(html)
 const css = buildCss(cssSource)
@@ -318,7 +319,10 @@ if (!qrSource.includes('function mountQrFeature')) fail('qr.js 缺少 mountQrFea
 if (!qrSource.includes('createQrMatrix')) fail('qr.js 没有使用打包的二维码内核')
 if (!panelSource.includes('applyHostDisplayMetrics')) fail('面板片段没有接 Host 的显示器物理尺寸')
 if (!panelSource.includes('mountDiagnoseFeature(shadow)')) fail('面板片段没有挂载诊断入口')
-if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS')) fail('面板片段没有注入登录桥样式')
+if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THEME_CSS')) fail('面板片段没有注入外观层样式')
+if (!panelSource.includes('mountPanelTheme(shadow)')) fail('面板片段没有挂载外观层')
+if (!themeSource.includes('function mountPanelTheme')) fail('theme.js 缺少 mountPanelTheme')
+if (!themeSource.includes('light-dark(')) fail('theme.js 没有 light-dark() 黑暗模式配色')
 if (!panelSource.includes('mountBridgeFeature(shadow)')) fail('面板片段没有挂载登录桥')
 if (!panelSource.includes('function pocketPreviewTarget')) fail('面板片段缺少登录桥目标解析')
 if (!bridgeSource.includes('function mountBridgeFeature')) fail('bridge.js 缺少 mountBridgeFeature')
@@ -456,6 +460,8 @@ const bundle = [
   indent(diagnoseSource, 4),
   '',
   indent(bridgeSource, 4),
+  '',
+  indent(themeSource, 4),
   '',
   indent(panelSource, 4),
   '',

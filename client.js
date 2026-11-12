@@ -16,7 +16,6 @@ window.__ModuleLoader__.load({
    ------------------------------------------------------------------ */
 
 :host {
-  color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   color: #1f1f1f;
@@ -4763,6 +4762,598 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
     }
 
     /* ------------------------------------------------------------------ *
+     * Pocket H5 —— 面板外观层（client.js 的片段源，不是独立 ES 模块）
+     *
+     * 把上游「整页表单」重排成 FlowPilot 风格的工作台：
+     *   48px 顶栏（品牌 + 当前页面 + 状态 + 动作）/ 左侧设置卡片 / 右侧手机画布卡片，
+     *   三层表面（base / surface / surface-2）+ 12px 圆角 + 4 栅格间距，颜色一律用
+     *   light-dark() 成对声明 —— 跟随 DSH 的 color-scheme，自动明暗切换。
+     * 只做外观与 DOM 重排：所有上游 id、事件、预览逻辑保持不变。
+     * ------------------------------------------------------------------ */
+
+    const PANEL_THEME_CSS = String.raw`
+    /* ==================================================================
+     * 1. 设计令牌：light-dark() 成对声明，跟随宿主 color-scheme
+     * ================================================================== */
+    .ph-workspace,
+    .ph-topbar,
+    .pocket-h5-root {
+      --p-base: light-dark(#f6f7f8, #17181a);
+      --p-surface: light-dark(#ffffff, #1d1f23);
+      --p-surface-2: light-dark(#f1f2f3, #0d0e10);
+      --p-surface-3: light-dark(#e8eaec, #2a2c32);
+      --p-hover: light-dark(#f1f2f3, #24262b);
+      --p-pressed: light-dark(#e8eaec, #2a2c32);
+      --p-border: light-dark(#eceef0, rgba(241, 242, 243, 0.08));
+      --p-border-strong: light-dark(#dfe1e4, rgba(227, 229, 231, 0.16));
+      --p-text: light-dark(#0d0e10, #f0f1f2);
+      --p-text-dim: light-dark(#61666d, rgba(240, 241, 242, 0.62));
+      --p-text-tertiary: light-dark(#9499a0, rgba(240, 241, 242, 0.45));
+      --p-brand: light-dark(#0d0e10, #f0f1f2);
+      --p-on-brand: light-dark(#ffffff, #0d0e10);
+      --p-mask: light-dark(rgba(13, 14, 16, 0.44), rgba(0, 0, 0, 0.62));
+      --p-dot: light-dark(#dcdcdc, rgba(255, 255, 255, 0.09));
+      --p-shadow-1: 0 1px 2px light-dark(rgba(13, 14, 16, 0.06), rgba(0, 0, 0, 0.36));
+      --p-shadow-2: 0 4px 16px light-dark(rgba(13, 14, 16, 0.1), rgba(0, 0, 0, 0.46));
+      --p-shadow-3: 0 16px 48px light-dark(rgba(13, 14, 16, 0.16), rgba(0, 0, 0, 0.56));
+      --p-radius: 12px;
+      --p-radius-sm: 8px;
+      --p-radius-xs: 6px;
+      --p-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    /* 兼容上游 :root 变量名：全部指向新面层，旧规则自动跟随明暗 */
+    .pocket-h5-root {
+      --ink: var(--p-text);
+      --ink-2: var(--p-text-dim);
+      --muted: var(--p-text-dim);
+      --faint: var(--p-text-tertiary);
+      --line: var(--p-border);
+      --line-strong: var(--p-border-strong);
+      --surface: var(--p-surface);
+      --surface-2: var(--p-surface-2);
+      --surface-3: var(--p-surface-3);
+      --accent: var(--p-brand);
+      --radius: 8px;
+      --sidebar-w: 300px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--p-text);
+      background: var(--p-base);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ==================================================================
+     * 2. 骨架：48px 顶栏 + 左侧设置卡 + 右侧画布卡（FlowPilot 三栏节奏）
+     * ================================================================== */
+    .workspace.ph-workspace {
+      grid-template-columns: 300px minmax(0, 1fr);
+      grid-template-rows: 48px minmax(0, 1fr);
+      gap: 0 12px;
+      padding: 0 16px 16px;
+      background: var(--p-base);
+      transition: none;
+    }
+    .ph-topbar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      height: 48px;
+      padding: 0;
+      background: transparent;
+    }
+    .ph-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex: none;
+      min-width: 0;
+    }
+    .ph-brand .brand {
+      gap: 8px;
+      font-size: 14.5px;
+      font-weight: 650;
+      letter-spacing: -0.2px;
+      color: var(--p-text);
+      text-decoration: none;
+    }
+    .ph-brand .brand-mark {
+      width: 26px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--p-brand);
+      color: var(--p-on-brand);
+      box-shadow: none;
+    }
+    .ph-brand .brand-mark svg { width: 16px; height: 16px; }
+    .ph-brand .brand-dot { color: var(--p-text-tertiary); }
+    .ph-brand .brand-sub {
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--p-surface-2);
+      font-size: 10.5px;
+      letter-spacing: 0.02em;
+      color: var(--p-text-dim);
+    }
+    .ph-spacer { flex: 1 1 auto; min-width: 8px; }
+    .ph-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+      min-width: 0;
+    }
+
+    /* 顶栏里的当前页面 + 小按钮（原 .preview-meta） */
+    .ph-topbar .preview-meta {
+      margin: 0;
+      padding: 0 2px;
+      gap: 6px;
+      font-size: 11.5px;
+      color: var(--p-text-tertiary);
+      flex: 0 1 auto;
+      overflow: hidden;
+    }
+    .ph-topbar .preview-meta > #previewName {
+      max-width: 220px;
+      font: 11px var(--p-mono);
+      color: var(--p-text-dim);
+    }
+    .ph-topbar .preview-meta .preview-dot { background: var(--p-text-tertiary); }
+    .ph-topbar .preview-meta .text-button { margin-left: 0; }
+    .ph-topbar .text-button {
+      padding: 4px 8px;
+      border-radius: var(--p-radius-xs);
+      font-size: 11.5px;
+      color: var(--p-text-dim);
+    }
+    .ph-topbar .text-button:hover { color: var(--p-text); background: var(--p-surface-2); }
+
+    /* 顶栏状态：压缩成胶囊，长文案省略 */
+    .ph-topbar #loadStatus {
+      flex: none;
+      max-width: 280px;
+      min-height: 26px;
+      margin: 0;
+      padding: 0 10px;
+      overflow: hidden;
+      border: 0;
+      border-radius: 999px;
+      background: var(--p-surface-2);
+      font-size: 11px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--p-text-dim);
+    }
+    .ph-topbar #loadStatus::before { background: var(--p-text-tertiary); }
+    .ph-topbar .icon-button {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+      color: var(--p-text-dim);
+    }
+    .ph-topbar .icon-button:hover { background: var(--p-hover); color: var(--p-text); }
+    .ph-topbar .icon-button svg { width: 16px; height: 16px; }
+
+    /* 左栏：设置卡片 */
+    .sidebar {
+      grid-column: 1;
+      grid-row: 2;
+      gap: 0;
+      padding: 10px 8px 8px;
+      border: 0;
+      border-radius: var(--p-radius);
+      background: var(--p-surface);
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+    .sidebar::-webkit-scrollbar { width: 8px; }
+    .sidebar::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--p-border-strong); }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+
+    /* 右栏：画布卡片 */
+    .main-panel {
+      grid-column: 2;
+      grid-row: 2;
+      border: 1px solid var(--p-border);
+      border-radius: var(--p-radius);
+      background: var(--p-base);
+      overflow: hidden;
+    }
+    .main-panel .canvas {
+      padding: 20px;
+      background-color: var(--p-base);
+      background-image: radial-gradient(var(--p-dot) 0.7px, transparent 0.7px);
+      background-size: 20px 20px;
+    }
+
+    /* ==================================================================
+     * 3. 设置分组：小标题 + 分组间距，不再一行一条描边
+     * ================================================================== */
+    .settings-section {
+      padding: 10px 10px 12px;
+      border-top: 0;
+      border-radius: var(--p-radius-sm);
+    }
+    .settings-section + .settings-section,
+    .settings-section + details.settings-section {
+      margin-top: 2px;
+    }
+    .settings-section + .settings-section::before,
+    .settings-section + details.settings-section::before {
+      content: "";
+      display: block;
+      height: 1px;
+      margin: 0 2px 10px;
+      background: var(--p-border);
+    }
+    .address-section { padding-top: 8px; }
+    .section-label {
+      margin: 0 0 10px;
+      padding: 0 2px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--p-text-tertiary);
+      line-height: 1.4;
+    }
+    .field-label {
+      margin: 0 0 6px;
+      padding: 0 2px;
+      font-size: 11.5px;
+      color: var(--p-text-dim);
+    }
+    .setting-hint {
+      margin-top: 8px;
+      padding: 0 2px;
+      font-size: 11px;
+      line-height: 1.7;
+      color: var(--p-text-tertiary);
+    }
+
+    /* ==================================================================
+     * 4. 控件：无描边面层 + 8px 圆角 + 36px 高度
+     * ================================================================== */
+    .address-toolbar { gap: 8px; }
+    .address-box {
+      height: 36px;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .address-box:focus-within {
+      background: var(--p-surface);
+      border-color: var(--p-border-strong);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-brand) 10%, transparent);
+    }
+    .address-box:has(input[aria-invalid="true"]) {
+      border-color: var(--p-border-strong);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-brand) 14%, transparent);
+    }
+    .address-box svg { width: 15px; height: 15px; color: var(--p-text-tertiary); }
+    .address-box input {
+      font: 12.5px var(--p-mono);
+      color: var(--p-text);
+    }
+    .address-box input::placeholder { font-size: 12px; color: var(--p-text-tertiary); }
+
+    .address-buttons { gap: 8px; }
+    .load-button {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-brand);
+      color: var(--p-on-brand);
+      font-size: 12.5px;
+      font-weight: 500;
+      box-shadow: none;
+    }
+    .load-button:hover { background: color-mix(in srgb, var(--p-brand) 88%, var(--p-base)); }
+    .load-button:active { transform: none; }
+    .load-button:disabled { opacity: 0.45; }
+
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+      color: var(--p-text-dim);
+    }
+    .icon-button:hover { background: var(--p-hover); color: var(--p-text); border-color: transparent; }
+    .icon-button:active { transform: none; }
+
+    .outline-button {
+      height: 34px;
+      margin-top: 8px;
+      border: 0;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+      font-size: 12px;
+      color: var(--p-text-dim);
+    }
+    .outline-button:hover { background: var(--p-hover); color: var(--p-text); border-color: transparent; }
+    .outline-button:active { transform: none; }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    summary:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--p-brand) 55%, transparent);
+      outline-offset: 1px;
+    }
+
+    /* 折叠区（代理 / 校准 / 屏幕规格） */
+    .fold { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--p-border-strong); }
+    .fold > summary {
+      padding: 2px 2px;
+      border-radius: var(--p-radius-xs);
+      font-size: 11.5px;
+      color: var(--p-text-dim);
+    }
+    .fold > summary:hover { color: var(--p-text); background: var(--p-surface-2); }
+    .fold > summary::after { border-color: var(--p-text-tertiary); }
+    .fold[open] > summary { margin-bottom: 10px; }
+    .summary-badge {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--p-surface-2);
+      color: var(--p-text-tertiary);
+    }
+
+    /* 表单控件 */
+    .field { margin-top: 10px; }
+    .field > span { margin-bottom: 5px; font-size: 11.5px; color: var(--p-text-dim); }
+    .field input,
+    .calibration-input input,
+    .bridge-manual textarea {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+      font-size: 12px;
+      color: var(--p-text);
+    }
+    .field input::placeholder,
+    .calibration-input input::placeholder { color: var(--p-text-tertiary); font-size: 11.5px; }
+    .field input:focus,
+    .calibration-input input:focus {
+      background: var(--p-surface);
+      border-color: var(--p-border-strong);
+    }
+    select {
+      height: 34px;
+      padding: 0 30px 0 10px;
+      border: 1px solid transparent;
+      border-radius: var(--p-radius-sm);
+      background-color: var(--p-surface-2);
+      color: var(--p-text);
+      font-size: 12px;
+    }
+    select:hover { border-color: transparent; background-color: var(--p-hover); }
+    .color-control select { background-color: var(--p-surface-2); }
+
+    /* 开关 / 分段 / 滑杆 */
+    .setting-row {
+      min-height: 36px;
+      margin: 2px 0;
+      font-size: 12.5px;
+      color: var(--p-text);
+    }
+    .setting-row small { font-size: 10.5px; color: var(--p-text-tertiary); }
+    .setting-row input:checked + .switch { background: var(--p-brand); }
+    .switch {
+      width: 32px;
+      height: 18px;
+      background: var(--p-surface-3);
+    }
+    .switch::before {
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background: var(--p-surface);
+      box-shadow: var(--p-shadow-1);
+    }
+    .setting-row input:checked + .switch::before { transform: translateX(14px); background: var(--p-on-brand); }
+    .setting-row input:disabled + .switch { opacity: 0.45; }
+    .segments {
+      padding: 3px;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+    }
+    .segments button,
+    .segments button[aria-pressed="false"] {
+      padding: 6px 0;
+      border-radius: var(--p-radius-xs);
+      font-size: 11.5px;
+      color: var(--p-text-dim);
+    }
+    .segments button[aria-pressed="true"] {
+      background: var(--p-surface);
+      color: var(--p-text);
+      box-shadow: var(--p-shadow-1);
+    }
+    .inline-controls { margin-top: 12px; font-size: 12.5px; color: var(--p-text); }
+    .inline-value { font-size: 11.5px; color: var(--p-text-dim); }
+    .color-control span { font: 10.5px var(--p-mono); color: var(--p-text-tertiary); }
+    .range-input { margin: 10px 0 2px; accent-color: var(--p-brand); }
+
+    /* 模拟设备 */
+    .device-card {
+      padding: 10px 12px;
+      border: 0;
+      border-radius: var(--p-radius-sm);
+      background: var(--p-surface-2);
+    }
+    .device-info strong { font-size: 12.5px; color: var(--p-text); }
+    .device-info small { font-size: 10.5px; color: var(--p-text-tertiary); }
+    .mini-phone { border-color: var(--p-border-strong); background: var(--p-surface-3); box-shadow: inset 0 0 0 2px var(--p-surface-2); }
+    .mini-phone span { background: var(--p-text-tertiary); }
+    .device-check { color: var(--p-text-dim); }
+    .device-content { font: 11.5px var(--p-mono); color: var(--p-text-tertiary); }
+    .spec-line { font-size: 11px; color: var(--p-text-tertiary); }
+    .spec-line strong,
+    .spec-line > span:last-child { font: 11px var(--p-mono); color: var(--p-text-dim); }
+
+    /* 显示比例读数 */
+    .scale-readout strong { font-size: 12.5px; font-weight: 600; color: var(--p-text); }
+    .scale-readout > span { font: 11px var(--p-mono); color: var(--p-text-dim); }
+    .calibration-ruler { border-color: var(--p-text-tertiary); }
+    .calibration-ruler:before { background: var(--p-text-tertiary); }
+
+    /* 侧栏底部 */
+    .sidebar-help {
+      margin-top: auto;
+      padding: 10px 10px 4px;
+      border-top: 1px solid var(--p-border);
+    }
+    .sidebar-help button { padding: 5px 4px; font-size: 11.5px; color: var(--p-text-dim); }
+    .sidebar-bottom {
+      gap: 6px;
+      margin-top: 0;
+      padding: 6px 10px 2px;
+      font-size: 10.5px;
+      color: var(--p-text-tertiary);
+    }
+    .saved-dot { background: var(--p-text-tertiary); }
+    .sidebar-bottom button { color: var(--p-text-dim); border-radius: var(--p-radius-xs); }
+    .sidebar-bottom button:hover { background: var(--p-surface-2); color: var(--p-text); }
+    .sidebar-note {
+      margin: 0;
+      padding: 2px 10px 6px;
+      font-size: 10.5px;
+      line-height: 1.6;
+      color: var(--p-text-tertiary);
+    }
+    #engineInfo { margin: 6px 10px; }
+
+    /* ==================================================================
+     * 5. 对话框 / 帮助 / toast（含二维码、诊断、登录桥对话框）
+     * ================================================================== */
+    dialog {
+      border: 1px solid var(--p-border-strong);
+      border-radius: var(--p-radius);
+      background: var(--p-surface);
+      color: var(--p-text);
+      box-shadow: var(--p-shadow-3);
+    }
+    dialog::backdrop { background: var(--p-mask); }
+    .eyebrow { font-size: 10px; letter-spacing: 1.4px; color: var(--p-text-tertiary); }
+    .dialog-heading h2 { font-size: 19px; font-weight: 600; letter-spacing: -0.4px; color: var(--p-text); }
+    .help-content { color: var(--p-text-dim); }
+    .help-content h3 { font-size: 12.5px; color: var(--p-text); }
+    .help-content p { font-size: 11.5px; line-height: 1.85; color: var(--p-text-dim); }
+    .help-content code {
+      background: var(--p-surface-2);
+      color: var(--p-text-dim);
+    }
+    .help-content .help-footnote { color: var(--p-text-tertiary); }
+    .help-note { background: var(--p-surface-2); }
+    .help-step > b { color: var(--p-text-tertiary); }
+    .help-footnote a { color: var(--p-text-dim); }
+    .toast {
+      width: calc(300px - 24px);
+      background: light-dark(#1d1f23, #f0f1f2);
+      color: light-dark(#f0f1f2, #0d0e10);
+      box-shadow: var(--p-shadow-2);
+    }
+    .help-backdrop { background: var(--p-mask); }
+
+    /* 二维码 / 诊断 / 登录桥 的细节配色（结构由各自片段提供） */
+    .qr-dialog .qr-frame { border-color: var(--p-border); background: #ffffff; }
+    .qr-dialog .qr-empty { color: var(--p-text-tertiary); }
+    .qr-dialog .qr-url { color: var(--p-text-dim); }
+    .qr-dialog .qr-hint { color: var(--p-text-tertiary); }
+    .qr-dialog .qr-hint b { color: var(--p-text-dim); }
+    .diagnose-dialog .diagnose-loading { color: var(--p-text-tertiary); }
+    .diagnose-dialog .diagnose-title { color: var(--p-text); }
+    .diagnose-dialog .diagnose-badge { background: var(--p-surface-2); color: var(--p-text-dim); }
+    .diagnose-dialog .diagnose-lines li,
+    .diagnose-dialog .diagnose-tips li { color: var(--p-text-dim); }
+    .diagnose-dialog .diagnose-tips { border-top-color: var(--p-border-strong); }
+    .diagnose-dialog .diagnose-tips li b { color: var(--p-text); }
+    .bridge-dialog .bridge-target { color: var(--p-text-dim); }
+    .bridge-dialog .bridge-status { border-color: var(--p-border); background: var(--p-surface-2); color: var(--p-text-dim); }
+    .bridge-dialog .bridge-manual summary { color: var(--p-text-dim); }
+    .bridge-banner { border-bottom: 1px solid var(--p-border); background: var(--p-surface-2); color: var(--p-text-dim); }
+    .bridge-banner .bridge-dot { background: var(--p-text-tertiary); }
+
+    /* ==================================================================
+     * 6. 窄窗口
+     * ================================================================== */
+    @media (max-width: 1080px) {
+      .workspace.ph-workspace { grid-template-columns: 272px minmax(0, 1fr); }
+      .ph-topbar .preview-meta > #previewName { max-width: 150px; }
+      .ph-topbar #loadStatus { max-width: 200px; }
+    }
+    @media (max-width: 860px) {
+      .workspace.ph-workspace { grid-template-columns: 244px minmax(0, 1fr); padding: 0 10px 10px; gap: 0 10px; }
+      .ph-brand .brand-sub { display: none; }
+      .ph-topbar .preview-meta { display: none; }
+      .ph-topbar #loadStatus { max-width: 150px; }
+    }
+    `
+
+    /**
+     * 重排上游 DOM：把品牌 / 当前页面 / 状态 / 刷新 / 新窗口移到 48px 顶栏，
+     * 其余保持原节点与 id（app.js 的事件绑定完全不变）。
+     * @param {ShadowRoot} shadow
+     * @returns {() => void} 清理函数
+     */
+    function mountPanelTheme(shadow) {
+      const workspace = shadow.querySelector('.workspace')
+      const sidebar = shadow.querySelector('.sidebar')
+      if (!workspace || !sidebar) return function () {}
+
+      const brandRow = shadow.querySelector('.sidebar-brand')
+      const meta = shadow.querySelector('.preview-meta')
+      const status = shadow.getElementById('loadStatus')
+      const refresh = shadow.getElementById('refreshButton')
+      const external = shadow.getElementById('externalButton')
+
+      const header = document.createElement('header')
+      header.className = 'ph-topbar'
+
+      const brand = document.createElement('div')
+      brand.className = 'ph-brand'
+      const mark = brandRow && brandRow.querySelector('.brand')
+      const sub = brandRow && brandRow.querySelector('.brand-sub')
+      if (mark) brand.append(mark)
+      if (sub) brand.append(sub)
+      header.append(brand)
+      if (meta) header.append(meta)
+      const spacer = document.createElement('div')
+      spacer.className = 'ph-spacer'
+      header.append(spacer)
+      const actions = document.createElement('div')
+      actions.className = 'ph-actions'
+      if (status) actions.append(status)
+      if (refresh) actions.append(refresh)
+      if (external) actions.append(external)
+      header.append(actions)
+
+      workspace.insertBefore(header, workspace.firstChild)
+      workspace.classList.add('ph-workspace')
+      if (brandRow) brandRow.remove()
+
+      return function disposePanelTheme() {
+        workspace.classList.remove('ph-workspace')
+        header.remove()
+      }
+    }
+
+    /* ------------------------------------------------------------------ *
      * Pocket H5 —— DSH 面板外壳（client.js 的片段源，不是独立 ES 模块）
      *
      * 由 build-client.mjs 原样插入 `window.__ModuleLoader__.load(...).factory` 内部，
@@ -4900,19 +5491,22 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
 
         const style = document.createElement('style')
         style.setAttribute('data-pocket-h5-style', '')
-        style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS
+        style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THEME_CSS
         const root = document.createElement('div')
         root.className = 'pocket-h5-root'
         root.innerHTML = MARKUP
         shadow.append(style, root)
 
         let dispose = null
+        let disposeTheme = null
         let disposeQr = null
         let disposeDiagnose = null
         let disposeBridge = null
         let disposeDisplay = null
         try {
           dispose = mountPocketH5(shadow, pocketDemoUrl())
+          // 外观层：把品牌/当前页面/状态/动作移到 48px 顶栏，并套上 FlowPilot 风格面层。
+          disposeTheme = mountPanelTheme(shadow)
           // Host 能读到真实显示器毫米尺寸时，100% 就是真机大小；失败保持浏览器估算。
           disposeDisplay = watchHostDisplayMetrics()
           // 上游工作台之外新增的「手机扫码」入口；失败不影响预览本身。
@@ -4944,6 +5538,11 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
             if (typeof disposeBridge === 'function') disposeBridge()
           } catch (error) {
             console.error('[pocket-h5] 登录桥清理失败', error)
+          }
+          try {
+            if (typeof disposeTheme === 'function') disposeTheme()
+          } catch (error) {
+            console.error('[pocket-h5] 外观层清理失败', error)
           }
           try {
             if (typeof disposeDisplay === 'function') disposeDisplay()

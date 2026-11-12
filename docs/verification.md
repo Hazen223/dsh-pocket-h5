@@ -620,3 +620,49 @@ GET /pocket-h5/bridge.json   => 404   （阶段 6 新路由，运行中的 Host 
 3. 真实目标站点（Cookie 认证、含 X-Frame-Options/SSO）的端到端登录预览。
 4. 页面内绝对跨域地址、WebSocket HMR 在真实 Vite/H5 项目中的表现（单测覆盖隧道，真实站点未验证）。
 5. 手动粘贴 Cookie 的真实浏览器复制流程（DevTools/Copy as cURL）。
+
+---
+
+## 15. 阶段 7（FlowPilot 风格外观层 + 黑暗模式）
+
+> 时间：2026-11-13 00:01–00:25（Asia/Shanghai）。触发：用户反馈面板左侧设置栏「设计太糟糕」，
+> 要求按 FlowPilot 的设计语言重排，并且界面要有黑暗模式。
+
+### 15.1 实现
+
+```text
+src/client/theme.js      新增：PANEL_THEME_CSS（light-dark 令牌 + 布局/控件/对话框覆盖）
+                              + mountPanelTheme()（DOM 重排：品牌/当前页面/状态/刷新/新窗口 → 48px 顶栏）
+build-client.mjs         注入 theme 片段；移除此前 `:host { color-scheme: light }` 的强制浅色
+src/client/panel.js      样式链：CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THEME_CSS；
+                         effect 里 mountPocketH5 → mountPanelTheme → 显示器/二维码/诊断/登录桥
+README / docs            新增「外观与黑暗模式」、§15 外观层说明；修正「不随宿主主题切换」的旧限制
+```
+
+### 15.2 验证
+
+```text
+node build-client.mjs     # 幂等（连跑两次）；client.js 218791 B
+shasum -a 256 client.js   # 1e1572a96988925efff583c8dda7b8ed2e8c1dbb7261e59d5e1189393690ee9c
+node --check client.js    # ok
+node --check index.js     # ok
+node tests/host-smoke.mjs    # 30/30 ok
+node tests/client-smoke.mjs  # 82/82 ok（新增 5 项外观层断言：light-dark/ph-topbar/300px 网格/mountPanelTheme）
+node tests/bridge-unit.mjs   # 27/27 ok
+```
+
+静态证据：
+
+- 生成产物中 `light-dark(` 出现 **22** 次（面层/文本/描边/阴影/点阵/热区成对声明）；
+- 强制 `color-scheme: light` 出现 **0** 次（改为继承宿主 color-scheme，DSH 深色主题自动生效）；
+- `ph-topbar` 出现 18 次（顶栏结构与样式）；
+- `git status ui/` 为空：上游四个快照文件仍未被修改（外观层只覆盖，不改快照）。
+
+### 15.3 未验证项（阶段 7）
+
+1. **视觉**：浅色/黑暗两种主题下的实际渲染、间距/对齐、1080/860px 窄宽度断点——无浏览器控制，
+   需用户在 DSH 里刷新后目视；深色由「DSH 设置 → 外观 → 深色」触发。
+2. 顶栏动作（刷新 / 在系统浏览器打开 / 二维码 / 诊断 / 登录桥）在真实宽度下的排布与换行。
+3. 对话框（二维码/诊断/登录桥/帮助）在深色主题下的对比度。
+4. 面板重新进入（StrictMode/切换面板）时 header 重建是否有布局闪动。
+5. 仅刷新 GUI 即可（本轮没有 Host 变更，不需要重启 DSH）。

@@ -280,6 +280,11 @@ check(source.includes('bridgeBanner'), 'login-bridge banner is bundled')
 check(source.includes('function pocketPreviewTarget'), 'bridged preview resolves back to the real target')
 check(source.includes('window.pocketBridge'), 'navigation is bridge-aware (refresh keeps the proxy)')
 check(source.includes('完全磁盘访问'), 'permission guidance for Safari cookies is included')
+check(source.includes('PANEL_THEME_CSS'), 'FlowPilot-style appearance layer is bundled')
+check(source.includes('light-dark('), 'appearance tokens use light-dark() for dark mode')
+check(source.includes('ph-topbar'), 'brand/status/actions are moved into a top bar')
+check(source.includes('grid-template-columns: 300px minmax(0, 1fr)'), 'workspace uses the sidebar + canvas card layout')
+check(source.includes('mountPanelTheme'), 'appearance layer is mounted with the panel')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

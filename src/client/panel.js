@@ -136,19 +136,22 @@ function PocketH5Panel() {
 
     const style = document.createElement('style')
     style.setAttribute('data-pocket-h5-style', '')
-    style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS
+    style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THEME_CSS
     const root = document.createElement('div')
     root.className = 'pocket-h5-root'
     root.innerHTML = MARKUP
     shadow.append(style, root)
 
     let dispose = null
+    let disposeTheme = null
     let disposeQr = null
     let disposeDiagnose = null
     let disposeBridge = null
     let disposeDisplay = null
     try {
       dispose = mountPocketH5(shadow, pocketDemoUrl())
+      // 外观层：把品牌/当前页面/状态/动作移到 48px 顶栏，并套上 FlowPilot 风格面层。
+      disposeTheme = mountPanelTheme(shadow)
       // Host 能读到真实显示器毫米尺寸时，100% 就是真机大小；失败保持浏览器估算。
       disposeDisplay = watchHostDisplayMetrics()
       // 上游工作台之外新增的「手机扫码」入口；失败不影响预览本身。
@@ -180,6 +183,11 @@ function PocketH5Panel() {
         if (typeof disposeBridge === 'function') disposeBridge()
       } catch (error) {
         console.error('[pocket-h5] 登录桥清理失败', error)
+      }
+      try {
+        if (typeof disposeTheme === 'function') disposeTheme()
+      } catch (error) {
+        console.error('[pocket-h5] 外观层清理失败', error)
       }
       try {
         if (typeof disposeDisplay === 'function') disposeDisplay()

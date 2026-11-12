@@ -178,7 +178,9 @@ Shadow DOM（`attachShadow({ mode: 'open' })`）把整份 CSS 和整棵标记关
 
 - 隔离是单向的：shadow 内样式不外泄，但**可继承属性**（`font-family`、`color` 等）仍会从宿主
   继承进来；上游 `:root → :host` 重新声明了字体与颜色，实际会覆盖。
-- **宿主主题 token 不会自动生效**：面板自带上游黑白灰配色，这是已知限制（见 §10）。
+- **宿主主题 token 的映射**：外观层（§15）把上游变量名映射到 `light-dark()` 面层令牌，
+  并用继承的 `color-scheme` 跟随 DSH 浅色/黑暗主题；上游 CSS 本身仍保持黑白灰硬编码，
+  由外观层覆盖具体选择器。
 - 事件不穿透（`composed` 事件除外）：上游的 `document.addEventListener('keydown')` 转换后
   监听的是 ShadowRoot；焦点在预览 iframe 内时父文档收不到键盘事件（上游同样如此）。
 - `position: fixed` 在 shadow 内仍相对浏览器视口，所以 toast/遮罩必须改 `absolute`。
@@ -396,9 +398,8 @@ DSH Web GUI（宿主页面）
 
 - **界面文案仍是上游中文**，没有接入 DSH 的 locale 体系；品牌、帮助弹窗、示例页
   （「留白」）都是上游原样内容。
-- **工作台自带黑白灰浅色配色，不随宿主深浅色切换**。上游 CSS 颜色全部硬编码、
-  `color-scheme` 固定为 light；面板刻意保持上游视觉，不做主题映射（要做就得改 CSS，
-  与「不重写视觉层」冲突）。
+- **外观层覆盖上游配色**：工作台现在跟随 DSH 主题自动明暗切换（`light-dark()` 令牌），
+  但设备外框/状态栏等「被预览的手机」保持中性灰，不参与主题映射。
 - **目标 H5 若设置 `X-Frame-Options` / CSP `frame-ancestors`，预览会空白**。
   工具不修改也不绕过响应头；解决办法是在你自己的开发服务里允许被嵌入，
   或先用「在系统浏览器打开」确认 H5 服务本身可访问。面板里的「诊断」会直接把这条原因标出来。
@@ -601,3 +602,37 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
   代理已改写请求 origin/referer 与响应 Location 以尽量兼容。
 - 代理剥离 `X-Frame-Options`/`frame-ancestors` 是为了「能在面板里看」，不代表目标站愿意被嵌入；
   仅用于本机自测。
+
+## 15. 外观层：FlowPilot 风格重排 + 黑暗模式（阶段 7 新增）
+
+### 15.1 目标
+
+上游工作台是「整页表单」的排版（11–12.5px 密排、每节一条描边、没有顶栏），放进 1000px 宽的面板里
+显得拥挤；用户要求按 FlowPilot 的设计语言重排，并且界面要有黑暗模式。
+
+### 15.2 做法（不重写业务逻辑）
+
+- **DOM 重排**（`src/client/theme.js` 的 `mountPanelTheme`）：在上游 DOM 已挂载、app.js 已完成
+  事件绑定之后，创建 `<header class="ph-topbar">` 作为 `.workspace` 的第一个 grid 子项，
+  把 `.brand` / `.brand-sub` / `.preview-meta` / `#loadStatus` / `#refreshButton` / `#externalButton`
+  移动进去；`#previewName`、示例、二维码、诊断、登录桥按钮随 `.preview-meta` 一起在顶栏。
+  **所有 id 与监听器不变**；卸载时只移除 header。
+- **布局**：`.workspace.ph-workspace` → `grid-template-columns: 300px 1fr; grid-template-rows: 48px 1fr`；
+  左栏是 surface 卡片（12px 圆角、内部滚动），右栏是画布卡片（1px 边界 + 点阵底）。
+- **视觉令牌**：`.pocket-h5-root` 定义 `--p-surface / --p-surface-2 / --p-surface-3 / --p-hover /
+  --p-border / --p-text / --p-brand / --p-mask / --p-shadow-*`，全部**成对**写成
+  `light-dark(浅色, 深色)`，并把上游 `--surface / --ink / --line / ...` 映射到这些令牌，
+  让上游大量使用变量的规则自动获得暗色。
+- **暗色来源**：不读 JS 主题服务、不做开关；`light-dark()` 跟随元素继承的 `color-scheme`，
+  DSH 的 theme presenter 本来就会在 `<html>` 上设置它，Shadow DOM 内继承即可自动切换。
+  构建期已移除此前 `:host { color-scheme: light }` 的强制浅色。
+- **覆盖范围**：侧栏分组/控件/开关/分段/滑杆、画布点阵、对话框/帮助/toast、二维码/诊断/登录桥
+  对话框细节色、滚动条、窄窗口断点（1080/860px）。
+
+### 15.3 已知限制 / 注意
+
+- 设备外框、屏幕边框、状态栏、灵动岛、手势条**不参与**主题映射（保持中性灰/用户设置色），
+  这样黑暗模式下手机依然是「手机」而不是一块深色矩形。
+- `light-dark()` 需要宿主设置 `color-scheme`；在 DSH 之外的浏览器页面打开时默认浅色。
+- 顶栏动作在 `≤860px` 时隐藏「当前页面」区（只保留品牌 + 状态 + 动作），避免挤压。
+- 外观层只改样式与节点位置，不改 `ui/app.js` 的任何逻辑；`ui/` 快照仍与上游逐字节一致。
