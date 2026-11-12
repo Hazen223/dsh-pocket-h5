@@ -768,3 +768,36 @@ node tests/bridge-unit.mjs   # 27/27 ok
 2. 状态栏在 62pt 安全区内的视觉位置、深浅主题下的对比、电池百分比的字号/位置。
 3. 底部手势条与横屏切換。
 4. 仅 client.js 变更：刷新 GUI 即可。
+
+---
+
+## 18. 阶段 10（侧栏说明收进 ? 悬浮提示）
+
+> 触发：用户反馈左侧说明文字太多，要求遵循「Avoid unnecessary secondary labels and descriptions.
+> Let the layout do the explaining.」，把必要说明放进圆形 ? 图标（hover 出现）。
+
+### 18.1 改动
+
+- 隐藏 `.settings-section .setting-hint` 与 `.sidebar-note`（不再常驻）；
+- 8 个 `.ph-help` 圆形 ? 按钮：预览地址、显示与尺寸、模拟设备、系统外观、页面布局、SOCKS5、
+  校准实际尺寸、侧栏页脚；
+- `.ph-tip` 浮层：hover / focus 出现、点击固定、Esc/滚动/失焦关闭；支持 `data-tip-from`
+  追加当前 `#calibrationStatus` / `#layoutHint` 的实时文字；
+- `<summary>` 内的 ? 阻止事件冒泡，不触发展开/收起；浮层 `position: fixed` 避免被滚动容器裁切；
+- 分区标题仍保留（结构说明），但不再有长段解释文字。
+
+### 18.2 验证
+
+```text
+node build-client.mjs        # 幂等；client.js   317,145 B
+node --check client.js       # ok
+node tests/host-smoke.mjs    # 30/30 ok
+node tests/client-smoke.mjs  # 103/103 ok（新增 4 项 ? / 提示 / 隐藏说明断言）
+node tests/bridge-unit.mjs   # 27/27 ok
+```
+
+### 18.3 未验证项（阶段 10）
+
+1. ? 浮层在真实面板中的定位（贴边/下方空间不足时翻到上方）、深浅主题对比、`summary` 内点击行为；
+2. 隐藏说明后各控件是否仍然自解释（需要用户从视觉上确认是否还想保留某条说明）；
+3. 仅 client.js 变更：刷新 GUI 即可。

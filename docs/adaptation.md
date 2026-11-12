@@ -664,7 +664,19 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
 - **底部手势条**：134×5、圆角 2.5、距底 8pt（横屏 180×5、距底 7pt）。
 - app.js 的电池填充宽度由 `24 * level` 改为 `21 * level`（iOS 电池体内宽）。
 
-### 15.5 已知限制 / 注意
+### 15.5 说明文字收进 ? 提示（阶段 10 补充）
+
+原则：*Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.*
+
+- 隐藏 `.settings-section .setting-hint` 与 `.sidebar-note`（静态说明、校准提示、布局提示、模拟器说明）；
+- 每个分区标题/折叠项摘要旁加一个 15px 圆形 `?`（`.ph-help`，`cursor: help`）；
+  hover / focus 出现 `.ph-tip` 浮层，点击可固定，Esc / 滚动 / 失焦关闭；
+- 浮层内容 = 固定说明 +（可选）实时状态：`data-tip-from="#calibrationStatus"`、`#layoutHint`；
+- 8 个提示点：预览地址、显示与尺寸、模拟设备、系统外观、页面布局、SOCKS5、校准、页脚（外观保存/说明）；
+- 放在 `<summary>` 内的 `?` 会 `preventDefault + stopPropagation`，不会触发展开/收起；
+- 工具提示用 `position: fixed` 渲染，避免被侧栏滚动容器裁切。
+
+### 15.6 已知限制 / 注意
 
 - 设备外框、屏幕边框、状态栏、灵动岛、手势条**不参与**主题映射（保持中性灰/用户设置色），
   这样黑暗模式下手机依然是「手机」而不是一块深色矩形。

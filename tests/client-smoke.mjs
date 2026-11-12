@@ -309,6 +309,10 @@ check(source.includes('viewBox="0 0 18 12"'), 'status bar signal icon uses the s
 check(source.includes('cy="11.4"'), 'status bar Wi-Fi icon uses the standard arcs + dot')
 check(source.includes('21 * state.battery'), 'battery fill width matches the iOS battery body')
 check(source.includes('width: 134px'), 'home indicator uses the standard 134px width')
+check(source.includes('className = \'ph-help\''), 'sidebar explanations are moved into circular ? buttons')
+check(source.includes('.ph-tip'), 'help buttons show a styled hover tooltip')
+check(source.includes("settings-section .setting-hint"), 'secondary hint paragraphs are hidden from the layout')
+check(source.includes('data-tip-from'), 'help tooltips can append live status text')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

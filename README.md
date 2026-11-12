@@ -33,7 +33,7 @@ dsh-pocket-h5/
 ├── locale/{zh,en}.json   # 插件管理页显示的名称与描述
 ├── icon.svg              # 插件图标（复用上游手机图形）
 ├── tests/host-smoke.mjs  # Host 冒烟测试（30 项：demo/display/probe/bridge + 方法/HEAD/穿越边界）
-├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（99 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层/边框/控件）
+├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（103 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层/边框/控件/帮助）
 ├── tests/bridge-unit.mjs # 登录桥单测（27 项：Cookie 解析/过滤/代理注入/头部改写/隧道）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
@@ -86,7 +86,7 @@ node build-client.mjs
 
 ```sh
 node tests/host-smoke.mjs     # 30 项：demo/display/probe/bridge 路由、方法、HEAD、穿越、Cookie 注入与错误边界
-node tests/client-smoke.mjs   # 99 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层、边框几何、标准控件
+node tests/client-smoke.mjs   # 103 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层、边框几何、标准控件、? 提示
 node tests/bridge-unit.mjs    # 27 项：Safari binarycookies、域名/路径过滤、代理注入、Set-Cookie/Location 改写、隧道
 ```
 
@@ -120,6 +120,9 @@ node build-client.mjs      # 重新生成 client.js
   圆角卡片（不再用横线分隔），卡片内折叠项（代理/校准/屏幕规格）是下沉的小面板；分组标题是小号
   加字距灰字，控件统一 34–36px 高的无描边面层，主按钮为黑/白反色（跟随主题）。底部帮助/自动保存/
   重置也单独成一张卡片。
+- **说明文字不进版面**：遵循「Avoid unnecessary secondary labels and descriptions」——静态说明、
+  校准/布局提示都不再常驻，收进分区标题旁的**圆形 ? 图标**里，hover / focus 出现（点击可固定，
+  Esc 关闭）；需要时还会附上当前实时状态（如校准状态、布局模式说明）。
 - **右侧画布卡**：点阵背景 + 手机预览，卡片 12px 圆角 + 1px 边界。
 - **设备外框**：用**你提供的 iPhone 外框图片**（`src/client/assets/bezel.webp`，屏幕开口已抠成透明）
   当「手机壳」**盖在长方形页面之上**：页面本身是矩形、没有 CSS 圆角，四角由不透明的边框内框自然裁切

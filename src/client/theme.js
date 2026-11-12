@@ -677,6 +677,62 @@ dialog::backdrop { background: var(--p-mask); }
 .landscape .home-area { height: 21px; }
 .landscape .home-area span { width: 180px; bottom: 7px; }
 
+/* ==================================================================
+ * 5.6 侧栏说明：能省的副标题/说明全部收进圆形「?」的 hover 提示
+ *     —— 布局本身说明用法，必要的解释按需出现。
+ * ================================================================== */
+.ph-help {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-left: 6px;
+  padding: 0;
+  border: 1px solid var(--p-border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--p-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+.appearance-section > summary > .ph-help { margin-left: auto; }
+.ph-help:hover,
+.ph-help:focus-visible {
+  color: var(--p-text);
+  border-color: var(--p-text-tertiary);
+  background: var(--p-hover);
+  outline: none;
+}
+.ph-tip {
+  position: fixed;
+  z-index: 30;
+  max-width: 268px;
+  padding: 8px 10px;
+  border: 1px solid var(--p-border-strong);
+  border-radius: var(--p-radius-sm);
+  background: var(--p-surface);
+  color: var(--p-text-dim);
+  font-size: 11.5px;
+  line-height: 1.7;
+  box-shadow: var(--p-shadow-2);
+  pointer-events: none;
+}
+.ph-tip-text { margin: 0; }
+.ph-tip-status {
+  margin: 5px 0 0;
+  padding-top: 5px;
+  border-top: 1px solid var(--p-border);
+  color: var(--p-text-tertiary);
+  font-size: 11px;
+}
+/* 静态说明与脚注不再占版面：内容已在对应 ? 提示里 */
+.settings-section .setting-hint,
+.sidebar-note { display: none !important; }
+
 /* 二维码 / 诊断 / 登录桥 的细节配色（结构由各自片段提供） */
 .qr-dialog .qr-frame { border-color: var(--p-border); background: #ffffff; }
 .qr-dialog .qr-empty { color: var(--p-text-tertiary); }
@@ -776,7 +832,128 @@ function mountPanelTheme(shadow) {
   }
   sidebar.append(foot)
 
+  // 必要的说明收进圆形「?」提示：hover / focus 出现，点击可固定，Esc 关闭。
+  const HELP_ITEMS = [
+    {
+      target: '#addressTitle',
+      tip: '输入端口、localhost:3000/path 或完整 URL；⌘/Ctrl + Enter 打开。最近地址保存在本机。',
+    },
+    {
+      target: '#displayTitle',
+      tip: '100% 按显示器换算成真机物理大小（macOS 由 Host 读取显示器尺寸）。有偏差时用「校准实际尺寸」量一次即可。',
+      dynamic: '#calibrationStatus',
+    },
+    {
+      target: '#deviceTitle',
+      tip: '模拟 iPhone 17：402×874 逻辑像素、1206×2622 物理像素、460 PPI、@3x；切换横竖屏会同步调整内容区。',
+    },
+    {
+      target: '.appearance-section > summary',
+      tip: '状态栏、手势条、文字与背景只改变模拟外观；安全区参考线不会注入或修改 H5 的 env(safe-area-inset-*)。',
+    },
+    {
+      target: '#layoutTitle',
+      tip: '「预留」让系统栏独立占位；「全屏页面」让 H5 铺满并被系统栏覆盖。参考线只是提示，不改变页面。',
+      dynamic: '#layoutHint',
+    },
+    {
+      target: '#proxyDetails > summary',
+      tip: '面板版无法设置 iframe 请求的代理（沿用宿主浏览器的网络设置）；这里保留配置项，但不会修改系统代理。',
+    },
+    {
+      target: '#calibrationDetails > summary',
+      tip: '用真实尺子量出 200px 线段的长度并填入毫米数；校准按显示器保存在本机，之后 100% 就是真机物理大小。',
+    },
+    {
+      target: '.sidebar-bottom',
+      tip: '外观与布局预览，不是 iOS 模拟器；外观、地址与校准只保存在本机浏览器。',
+    },
+  ]
+
+  if (!root) return function disposePanelThemeWithoutHelp() {
+    workspace.classList.remove('ph-workspace')
+    header.remove()
+  }
+
+  const tip = document.createElement('div')
+  tip.className = 'ph-tip'
+  tip.hidden = true
+  tip.setAttribute('role', 'tooltip')
+  root.append(tip)
+
+  const buttons = []
+  let pinned = false
+  const hideTip = function () {
+    tip.hidden = true
+    pinned = false
+  }
+  const showTip = function (button) {
+    const staticText = button.getAttribute('data-tip') || ''
+    const dynamicSelector = button.getAttribute('data-tip-from')
+    const dynamicEl = dynamicSelector ? shadow.querySelector(dynamicSelector) : null
+    const dynamicText = dynamicEl && dynamicEl.textContent ? dynamicEl.textContent.trim() : ''
+    tip.replaceChildren()
+    const first = document.createElement('p')
+    first.className = 'ph-tip-text'
+    first.textContent = staticText
+    tip.append(first)
+    if (dynamicText !== '') {
+      const status = document.createElement('p')
+      status.className = 'ph-tip-status'
+      status.textContent = dynamicText
+      tip.append(status)
+    }
+    tip.hidden = false
+    tip.style.visibility = 'hidden'
+    const rect = button.getBoundingClientRect()
+    const width = tip.offsetWidth
+    const height = tip.offsetHeight
+    const margin = 10
+    const left = Math.min(Math.max(rect.left - 10, margin), window.innerWidth - width - margin)
+    let top = rect.bottom + 8
+    if (top + height > window.innerHeight - margin) top = rect.top - height - 8
+    tip.style.left = left + 'px'
+    tip.style.top = Math.max(margin, top) + 'px'
+    tip.style.visibility = 'visible'
+  }
+
+  for (const item of HELP_ITEMS) {
+    const target = shadow.querySelector(item.target)
+    if (!target) continue
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'ph-help'
+    button.textContent = '?'
+    button.setAttribute('aria-label', '说明')
+    button.setAttribute('data-tip', item.tip)
+    if (item.dynamic) button.setAttribute('data-tip-from', item.dynamic)
+    button.addEventListener('mouseenter', function () { showTip(button) })
+    button.addEventListener('mouseleave', function () { if (!pinned) hideTip() })
+    button.addEventListener('focus', function () { showTip(button) })
+    button.addEventListener('blur', function () { if (!pinned) hideTip() })
+    button.addEventListener('click', function (event) {
+      // 放在 <summary> 里时不要触发展开/收起
+      event.preventDefault()
+      event.stopPropagation()
+      if (pinned) { hideTip(); return }
+      pinned = true
+      showTip(button)
+    })
+    target.append(button)
+    buttons.push(button)
+  }
+  const onKeyDown = function (event) { if (event.key === 'Escape') hideTip() }
+  const onScroll = function () { hideTip() }
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('resize', hideTip)
+  shadow.addEventListener('scroll', onScroll, true)
+
   return function disposePanelTheme() {
+    window.removeEventListener('keydown', onKeyDown)
+    window.removeEventListener('resize', hideTip)
+    shadow.removeEventListener('scroll', onScroll, true)
+    for (const button of buttons) button.remove()
+    tip.remove()
     workspace.classList.remove('ph-workspace')
     header.remove()
   }
