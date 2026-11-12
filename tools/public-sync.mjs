@@ -73,7 +73,8 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', '.github'])
 
 function copyTree(from, to, rel = '') {
   for (const name of readdirSync(join(from, rel))) {
-    if (SKIP_FILES.has(name)) continue
+    // .git 可能是目录（正常仓库）或文件（git worktree），两种都跳过
+    if (name === '.git' || SKIP_FILES.has(name)) continue
     const relPath = rel === '' ? name : `${rel}/${name}`
     const absFrom = join(from, relPath)
     if (statSync(absFrom).isDirectory()) {
@@ -179,6 +180,7 @@ for (const name of readdirSync(cloneDir)) {
   rmSync(join(cloneDir, name), { recursive: true, force: true })
 }
 for (const name of readdirSync(outDir)) {
+  if (name === '.git') continue
   const src = join(outDir, name)
   const dst = join(cloneDir, name)
   if (statSync(src).isDirectory()) {
