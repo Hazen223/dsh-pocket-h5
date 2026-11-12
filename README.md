@@ -143,6 +143,19 @@ npm run release -- --resume=v0.2.0     # 只给已有 tag 补 Release 资产
 - Release 标题只写版本号（如 `v0.2.0`），变更说明放正文；
 - 资产：`client.js` + `build-info.json`；固定版本安装用 `#v0.2.0`。
 
+## 公共脱敏版
+
+公共镜像 `Hazen223/dsh-pocket-h5-public` 由脚本生成（与 FlowPilot 同一套流程）：
+
+```bash
+node tools/public-sync.mjs --version=0.2.0 --out=/tmp/ph5-public-gen   # 只生成，便于 review
+node tools/public-sync.mjs --source=v0.2.0 --version=0.2.0 --push      # 生成 → 提交 → tag → 推送 → Release
+```
+
+- 脱敏：私有仓库地址 → 公共仓库、移除作者机器相关表述、`/Users/…` → `/Users/x`；
+- 生成后自动跑禁词扫描（命中即中止）+ 构建 + host/client smoke；
+- 公共仓库不带 `.github`（Actions 只在私有仓库手动触发），Release 标题只写版本号、附 `client.js` + `build-info.json`。
+
 ## License
 
 本仓库代码以 **MIT** 发布（见 `LICENSE`，Copyright © 2026 Hazen223）。
