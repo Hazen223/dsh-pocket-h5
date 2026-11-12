@@ -176,15 +176,17 @@ const PANEL_THEME_CSS = String.raw`
 .ph-topbar .icon-button:hover { background: var(--p-hover); color: var(--p-text); }
 .ph-topbar .icon-button svg { width: 16px; height: 16px; }
 
-/* 左栏：设置卡片 */
+/* 左栏：不再是一张长卡片，而是「一区一卡」的卡片栈（无横向分隔线） */
 .sidebar {
   grid-column: 1;
   grid-row: 2;
-  gap: 0;
-  padding: 10px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 10px;
   border: 0;
-  border-radius: var(--p-radius);
-  background: var(--p-surface);
+  border-radius: 0;
+  background: transparent;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -210,35 +212,31 @@ const PANEL_THEME_CSS = String.raw`
 }
 
 /* ==================================================================
- * 3. 设置分组：小标题 + 分组间距，不再一行一条描边
+ * 3. 功能分区 = 独立卡片（一区一卡，全部依靠面层与间距分隔，不用横线）
  * ================================================================== */
-.settings-section {
-  padding: 10px 10px 12px;
-  border-top: 0;
-  border-radius: var(--p-radius-sm);
+.settings-section,
+details.settings-section {
+  flex: none;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--p-radius);
+  background: var(--p-surface);
+  box-shadow: var(--p-shadow-1);
 }
-.settings-section + .settings-section,
-.settings-section + details.settings-section {
-  margin-top: 2px;
-}
-.settings-section + .settings-section::before,
-.settings-section + details.settings-section::before {
-  content: "";
-  display: block;
-  height: 1px;
-  margin: 0 2px 10px;
-  background: var(--p-border);
-}
-.address-section { padding-top: 8px; }
+.address-section { padding-top: 12px; }
 .section-label {
   margin: 0 0 10px;
-  padding: 0 2px;
+  padding: 0;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--p-text-tertiary);
   line-height: 1.4;
 }
+/* 折叠形分区（系统外观）的标题行也当分区标题用 */
+details.appearance-section > summary.section-label { margin: 0; }
+details.appearance-section[open] > summary.section-label { margin: 0 0 10px; }
 .field-label {
   margin: 0 0 6px;
   padding: 0 2px;
@@ -329,17 +327,25 @@ textarea:focus-visible {
   outline-offset: 1px;
 }
 
-/* 折叠区（代理 / 校准 / 屏幕规格） */
-.fold { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--p-border-strong); }
+/* 折叠区（代理 / 校准 / 屏幕规格）：卡片内的下沉小面板，不再用虚线分隔 */
+.fold {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-top: 0;
+  border-radius: var(--p-radius-sm);
+  background: var(--p-surface-2);
+}
 .fold > summary {
-  padding: 2px 2px;
+  padding: 1px 0;
   border-radius: var(--p-radius-xs);
   font-size: 11.5px;
   color: var(--p-text-dim);
 }
-.fold > summary:hover { color: var(--p-text); background: var(--p-surface-2); }
+.fold > summary:hover { color: var(--p-text); }
 .fold > summary::after { border-color: var(--p-text-tertiary); }
-.fold[open] > summary { margin-bottom: 10px; }
+.fold[open] > summary { margin-bottom: 8px; }
+.fold > .field,
+.fold > .field-grid { margin-top: 8px; }
 .summary-badge {
   padding: 2px 7px;
   border-radius: 999px;
@@ -449,31 +455,48 @@ select:hover { border-color: transparent; background-color: var(--p-hover); }
 .calibration-ruler { border-color: var(--p-text-tertiary); }
 .calibration-ruler:before { background: var(--p-text-tertiary); }
 
-/* 侧栏底部 */
-.sidebar-help {
+/* 侧栏底部：单独一张小卡片 */
+.ph-sidebar-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
   margin-top: auto;
-  padding: 10px 10px 4px;
-  border-top: 1px solid var(--p-border);
+  padding: 10px 12px;
+  border-radius: var(--p-radius);
+  background: var(--p-surface);
+  box-shadow: var(--p-shadow-1);
 }
-.sidebar-help button { padding: 5px 4px; font-size: 11.5px; color: var(--p-text-dim); }
-.sidebar-bottom {
+.ph-sidebar-foot .sidebar-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+.ph-sidebar-foot .sidebar-help button { padding: 4px 2px; font-size: 11.5px; color: var(--p-text-dim); }
+.ph-sidebar-foot .sidebar-help button:hover { color: var(--p-text); background: transparent; }
+.ph-sidebar-foot .sidebar-bottom {
   gap: 6px;
-  margin-top: 0;
-  padding: 6px 10px 2px;
+  margin: 0;
+  padding: 0;
   font-size: 10.5px;
   color: var(--p-text-tertiary);
 }
-.saved-dot { background: var(--p-text-tertiary); }
-.sidebar-bottom button { color: var(--p-text-dim); border-radius: var(--p-radius-xs); }
-.sidebar-bottom button:hover { background: var(--p-surface-2); color: var(--p-text); }
-.sidebar-note {
+.ph-sidebar-foot .saved-dot { background: var(--p-text-tertiary); }
+.ph-sidebar-foot .sidebar-bottom button { color: var(--p-text-dim); border-radius: var(--p-radius-xs); }
+.ph-sidebar-foot .sidebar-bottom button:hover { background: var(--p-surface-2); color: var(--p-text); }
+.ph-sidebar-foot .sidebar-note {
   margin: 0;
-  padding: 2px 10px 6px;
+  padding: 0;
   font-size: 10.5px;
   line-height: 1.6;
   color: var(--p-text-tertiary);
 }
-#engineInfo { margin: 6px 10px; }
+.ph-sidebar-foot #engineInfo,
+.ph-sidebar-foot #devToolsButton { margin: 0; }
 
 /* ==================================================================
  * 5. 对话框 / 帮助 / toast（含二维码、诊断、登录桥对话框）
@@ -583,6 +606,20 @@ function mountPanelTheme(shadow) {
   workspace.insertBefore(header, workspace.firstChild)
   workspace.classList.add('ph-workspace')
   if (brandRow) brandRow.remove()
+
+  // 侧栏页脚（帮助/自动保存/重置/说明）收进一张独立卡片，避免用分割线。
+  const foot = document.createElement('div')
+  foot.className = 'ph-sidebar-foot'
+  for (const node of [
+    shadow.querySelector('.sidebar-help'),
+    shadow.getElementById('devToolsButton'),
+    shadow.getElementById('engineInfo'),
+    shadow.querySelector('.sidebar-bottom'),
+    shadow.querySelector('.sidebar-note'),
+  ]) {
+    if (node) foot.append(node)
+  }
+  sidebar.append(foot)
 
   return function disposePanelTheme() {
     workspace.classList.remove('ph-workspace')

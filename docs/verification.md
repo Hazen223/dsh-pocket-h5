@@ -666,3 +666,16 @@ node tests/bridge-unit.mjs   # 27/27 ok
 3. 对话框（二维码/诊断/登录桥/帮助）在深色主题下的对比度。
 4. 面板重新进入（StrictMode/切换面板）时 header 重建是否有布局闪动。
 5. 仅刷新 GUI 即可（本轮没有 Host 变更，不需要重启 DSH）。
+
+### 15.4 同轮调整：分区改卡片、去掉横向分隔线
+
+用户反馈「横线太多，不同功能区域用卡片分开」后同一轮调整：
+
+- 左栏从「一张长卡 + 分区分割线」改为**一区一卡的卡片栈**（`.settings-section` 各自
+  `background: var(--p-surface)` + `--p-shadow-1` + 12px 圆角，`gap: 8px`，栏本身透明）；
+- 删除 `::before` 分隔线规则；
+- 代理/校准/屏幕规格等折叠项从「虚线上边框」改为卡内 `--p-surface-2` 下沉小面板；
+- 帮助/开发者工具/引擎信息/自动保存/重置/说明由 `mountPanelTheme` 收进 `.ph-sidebar-foot`
+  独立卡片（不再用 `border-top`）；
+- 构建：client.js 220213 B；`node --check` 通过；host 30/30、client 82/82、bridge 27/27 全过。
+  视觉仍未由验证者目视（无浏览器控制），需用户刷新后确认。

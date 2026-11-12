@@ -618,7 +618,9 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
   移动进去；`#previewName`、示例、二维码、诊断、登录桥按钮随 `.preview-meta` 一起在顶栏。
   **所有 id 与监听器不变**；卸载时只移除 header。
 - **布局**：`.workspace.ph-workspace` → `grid-template-columns: 300px 1fr; grid-template-rows: 48px 1fr`；
-  左栏是 surface 卡片（12px 圆角、内部滚动），右栏是画布卡片（1px 边界 + 点阵底）。
+  左栏是「一区一卡」的卡片栈（每张 surface 卡片 12px 圆角 + 极轻阴影，卡片之间用 8px 间距分隔，
+  没有任何横向分割线；折叠项是卡内 `--p-surface-2` 下沉小面板），右栏是画布卡片（1px 边界 + 点阵底）。
+  侧栏页脚（帮助/开发者工具/引擎信息/自动保存/重置/说明）由 `mountPanelTheme` 收进一张独立卡片。
 - **视觉令牌**：`.pocket-h5-root` 定义 `--p-surface / --p-surface-2 / --p-surface-3 / --p-hover /
   --p-border / --p-text / --p-brand / --p-mask / --p-shadow-*`，全部**成对**写成
   `light-dark(浅色, 深色)`，并把上游 `--surface / --ink / --line / ...` 映射到这些令牌，
@@ -626,8 +628,10 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
 - **暗色来源**：不读 JS 主题服务、不做开关；`light-dark()` 跟随元素继承的 `color-scheme`，
   DSH 的 theme presenter 本来就会在 `<html>` 上设置它，Shadow DOM 内继承即可自动切换。
   构建期已移除此前 `:host { color-scheme: light }` 的强制浅色。
-- **覆盖范围**：侧栏分组/控件/开关/分段/滑杆、画布点阵、对话框/帮助/toast、二维码/诊断/登录桥
-  对话框细节色、滚动条、窄窗口断点（1080/860px）。
+- **覆盖范围**：侧栏卡片/控件/开关/分段/滑杆、卡内折叠面板、画布点阵、对话框/帮助/toast、
+  二维码/诊断/登录桥对话框细节色、滚动条、窄窗口断点（1080/860px）。
+- **去横线**：分区之间不画 `border`/`::before` 分隔线，全部靠「卡片面层 + 间距」区分；
+  卡内折叠项用下沉面层而不是虚线。
 
 ### 15.3 已知限制 / 注意
 
