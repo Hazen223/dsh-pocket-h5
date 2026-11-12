@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require("react");
     const h = React.createElement;
-    const POCKET_H5_VERSION = "0.1.0";
+    const POCKET_H5_VERSION = "0.2.0";
 
     /* ---- 上游 styles.css（shadow 作用域适配） ---- */
     const CSS = `/* ------------------------------------------------------------------
