@@ -212,6 +212,44 @@ const PANEL_THEME_CSS = String.raw`
 }
 
 /* ==================================================================
+ * 2.5 设备外框：用用户提供的 iPhone 边框图片替代上游 CSS 手绘外框
+ *     .phone 仍是上游布局盒（宽高/内边距由 app.js 按边框几何计算），
+ *     ::before 只负责画边框，.screen 落在图片的屏幕开口上。
+ * ================================================================== */
+.phone {
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.phone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--p-bezel-image);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  filter: drop-shadow(0 16px 30px light-dark(rgba(13, 14, 16, 0.18), rgba(0, 0, 0, 0.55)));
+}
+/* 横屏：同一张竖屏边框旋转 -90°（顶部 → 左侧），几何由 app.js 的边距保证 */
+.phone.landscape::before {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: var(--p-bezel-w);
+  height: var(--p-bezel-h);
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+.phone .side-key { display: none !important; }
+.phone .screen {
+  border-radius: var(--p-screen-radius);
+  box-shadow: none !important;
+}
+
+/* ==================================================================
  * 3. 功能分区 = 独立卡片（一区一卡，全部依靠面层与间距分隔，不用横线）
  * ================================================================== */
 .settings-section,
@@ -575,6 +613,15 @@ function mountPanelTheme(shadow) {
   const workspace = shadow.querySelector('.workspace')
   const sidebar = shadow.querySelector('.sidebar')
   if (!workspace || !sidebar) return function () {}
+
+  // 设备边框素材与几何（构建期由 assets/bezel.json 注入）
+  const root = shadow.querySelector('.pocket-h5-root')
+  if (root && typeof POCKET_BEZEL_IMAGE === 'string') {
+    root.style.setProperty('--p-bezel-image', 'url("' + POCKET_BEZEL_IMAGE + '")')
+    root.style.setProperty('--p-bezel-w', POCKET_BEZEL.portrait.outerW + 'px')
+    root.style.setProperty('--p-bezel-h', POCKET_BEZEL.portrait.outerH + 'px')
+    root.style.setProperty('--p-screen-radius', POCKET_BEZEL.radius + 'px')
+  }
 
   const brandRow = shadow.querySelector('.sidebar-brand')
   const meta = shadow.querySelector('.preview-meta')

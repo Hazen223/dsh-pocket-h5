@@ -679,3 +679,59 @@ node tests/bridge-unit.mjs   # 27/27 ok
   独立卡片（不再用 `border-top`）；
 - 构建：client.js 220213 B；`node --check` 通过；host 30/30、client 82/82、bridge 27/27 全过。
   视觉仍未由验证者目视（无浏览器控制），需用户刷新后确认。
+
+---
+
+## 16. 阶段 8（套用用户提供的 iPhone 外框图片）
+
+> 时间：2026-11-13 00:12–00:40（Asia/Shanghai）。触发：用户发来一张 iPhone 外框图，
+> 要求「白色区域是屏幕区域，帮我套上去」。
+
+### 16.1 素材处理（可复现）
+
+```text
+输入：用户提供的 1318×2718 PNG（透明背景，屏幕开口为浅色区域 + 灵动岛）
+处理：tools/prepare-bezel.py
+  - 从画面中心泛洪浅色像素得到屏幕开口，填洞（含灵动岛）→ 开口像素全部置为透明；
+  - 裁到外框 bbox：1318×2717，屏幕开口 = (56, 48, 1206, 2622)（横竖比 0.460 = 402/874）；
+  - 保存 WebP q92：src/client/assets/bezel.webp，63,030 字节（61.6 KiB）；
+  - 记录逻辑几何（÷3）：portrait 外框 439.3333×905.6667，开口 (18.6667, 16.0)，
+    右下留边 18.6667/15.6667；landscape = 旋转 -90°（开口 874×402）。
+```
+
+### 16.2 接入方式
+
+```text
+build-client.mjs
+  - 读取 assets/bezel.webp + bezel.json，校验屏幕开口 402×874、图片 <200 KiB；
+  - 内联为 data:image/webp;base64 常量 POCKET_BEZEL_IMAGE + POCKET_BEZEL；
+  - app.js 两处机械替换：
+    · device.bodyWidthMm/bodyHeightMm ← 边框比例换算（72.777 / 150.032 mm）
+    · resizeDevice 的 padding ← POCKET_BEZEL.portrait/landscape 逐边几何
+src/client/theme.js
+  - .phone 只保留布局盒；::before 画边框（横屏 rotate(-90deg)）；.side-key 隐藏；
+  - .screen border-radius = 素材开口半径 90px，去掉上游 5/6px 描边环；
+  - mountPanelTheme 把 --p-bezel-image/--p-bezel-w/--p-bezel-h/--p-screen-radius 写到面板根节点。
+assets/README.md + tools/prepare-bezel.py 记录来源与重做方式。
+```
+
+尺寸核对：`bodyWidthMm × (460/3/25.4) = 72.777 × 6.036745 ≈ 439.333`（外框逻辑宽）；
+`439.333 − 18.667 − 402 = 18.667`（右留边），`905.667 − 16 − 874 = 15.667`（底留边）。
+
+### 16.3 验证
+
+```text
+node build-client.mjs        # 幂等；client.js 307,081 B（边框 base64 约 +84 KiB）
+node --check client.js       # ok
+node tests/host-smoke.mjs    # 30/30 ok
+node tests/client-smoke.mjs  # 93/93 ok（新增 11 项边框几何/内联断言）
+node tests/bridge-unit.mjs   # 27/27 ok
+```
+
+### 16.4 未验证项（阶段 8）
+
+1. 真实渲染：边框图片与 `.screen` 的对齐（尤其圆角处 vs 抠空开口）、横屏旋转方向与边缘留白、
+   深色主题下的投影/边框观感——无浏览器控制，需用户刷新后目视。
+2. 高 DPI/150% 缩放下的边框清晰度（素材为 3x，理论足够）。
+3. 用户实际设备上的「100% 真机大小」与边框图片比例是否观感一致。
+4. 仅 client.js 变更：刷新 GUI 即可，无需重启 DSH。

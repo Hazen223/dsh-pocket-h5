@@ -201,7 +201,7 @@ function buildCss(source) {
  * 3. 逻辑：上游 app.js
  * ------------------------------------------------------------------ */
 
-function buildApp(source) {
+function buildApp(source, bezel) {
   let code = source
 
   const bridgeStart = code.indexOf('if (window.pocketDesktop) {')
@@ -252,11 +252,32 @@ function buildApp(source) {
     "const bridged = window.pocketBridge && window.pocketBridge.target === url ? window.pocketBridge.entryUrl : null;\n  $('previewFrame').src = bridged || url;",
   )
 
+  // 设备外框：把上游「按机身毫米数推导外框」改成「按边框图片的屏幕开口 + 留边」。
+  // 逻辑像素到毫米的换算不变（460 PPI / @3x），只是机身尺寸由边框素材比例决定。
+  const mmPerLogicalPx = (bezel.logical.pixelRatio * 25.4) / bezel.logical.ppi
+  const bodyWidthMm = (bezel.logical.portrait.outerW * mmPerLogicalPx).toFixed(6)
+  const bodyHeightMm = (bezel.logical.portrait.outerH * mmPerLogicalPx).toFixed(6)
+  const deviceLine = 'const device = { ppi: 460, pixelRatio: 3, bodyWidthMm: 71.5, bodyHeightMm: 149.6 };'
+  if (!code.includes(deviceLine)) fail('app.js 的 device 常量行未找到')
+  code = code.split(deviceLine).join(
+    'const device = { ppi: 460, pixelRatio: 3, bodyWidthMm: ' + bodyWidthMm + ', bodyHeightMm: ' + bodyHeightMm + ' }; // 外框尺寸来自 src/client/assets/bezel.json',
+  )
+
+  const paddingLine = "$('phone').style.padding = `${(outerHeight - height) / 2 - 1}px ${(outerWidth - width) / 2 - 1}px`;"
+  if (!code.includes(paddingLine)) fail('app.js 的外框 padding 行未找到')
+  const paddingReplacement = [
+    "const bezel = state.landscape ? POCKET_BEZEL.landscape : POCKET_BEZEL.portrait;",
+    '  // 屏幕开口在边框图片里上下留边不对称，按素材几何定位 .screen',
+    "  $('phone').style.padding = `${bezel.screenY}px ${bezel.outerW - bezel.screenX - bezel.screenW}px ${bezel.outerH - bezel.screenY - bezel.screenH}px ${bezel.screenX}px`;",
+  ].join('\n')
+  code = code.split(paddingLine).join(paddingReplacement)
+
   const createElementCount = count(code, 'document.createElement(')
   if (createElementCount !== 1) fail('document.createElement 出现 ' + createElementCount + ' 次（预期 1 次，用于 datalist option）')
   code = code.split('document.createElement(').join('realDocument.createElement(')
 
   if (code.includes('pocketDesktop.reload')) fail('仍残留 pocketDesktop.reload')
+  if (!code.includes('POCKET_BEZEL.portrait')) fail('app.js 没有按边框几何定位屏幕')
   return code
 }
 
@@ -299,9 +320,20 @@ const diagnoseSource = await read('src/client/diagnose.js')
 const bridgeSource = await read('src/client/bridge.js')
 const themeSource = await read('src/client/theme.js')
 
+/* 设备边框素材：用户提供的 iPhone 外框（屏幕开口已抠空），几何见 assets/README.md */
+const bezelImageBytes = await readFile(join(root, 'src/client/assets/bezel.webp'))
+const bezelMetrics = JSON.parse(await read('src/client/assets/bezel.json'))
+if (bezelImageBytes.length > 200 * 1024) fail('边框素材过大：' + bezelImageBytes.length + ' 字节（应小于 200 KiB）')
+if (bezelMetrics?.logical?.portrait?.screenW !== 402 || bezelMetrics?.logical?.portrait?.screenH !== 874) {
+  fail('边框几何异常：屏幕开口应是 402x874 逻辑像素')
+}
+ok('边框素材 ' + (bezelImageBytes.length / 1024).toFixed(1) + ' KiB · ' +
+  bezelMetrics.image.width + 'x' + bezelMetrics.image.height + '（屏幕 ' +
+  bezelMetrics.image.screen.width + 'x' + bezelMetrics.image.screen.height + ' 已抠空）')
+
 const markup = buildMarkup(html)
 const css = buildCss(cssSource)
-const appCode = buildApp(appSource)
+const appCode = buildApp(appSource, bezelMetrics)
 
 const appIds = new Set([...appCode.matchAll(/\$\('([A-Za-z0-9_-]+)'\)/g)].map((match) => match[1]))
 const markupIds = new Set([...markup.matchAll(/\bid="([A-Za-z0-9_-]+)"/g)].map((match) => match[1]))
@@ -323,6 +355,7 @@ if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THE
 if (!panelSource.includes('mountPanelTheme(shadow)')) fail('面板片段没有挂载外观层')
 if (!themeSource.includes('function mountPanelTheme')) fail('theme.js 缺少 mountPanelTheme')
 if (!themeSource.includes('light-dark(')) fail('theme.js 没有 light-dark() 黑暗模式配色')
+if (!themeSource.includes('--p-bezel-image')) fail('theme.js 没有使用设备边框素材')
 if (!panelSource.includes('mountBridgeFeature(shadow)')) fail('面板片段没有挂载登录桥')
 if (!panelSource.includes('function pocketPreviewTarget')) fail('面板片段缺少登录桥目标解析')
 if (!bridgeSource.includes('function mountBridgeFeature')) fail('bridge.js 缺少 mountBridgeFeature')
@@ -397,6 +430,14 @@ const qrRuntime = [
   '',
 ].join('\n')
 
+const bezelImageUrl = 'data:image/webp;base64,' + bezelImageBytes.toString('base64')
+const bezelRuntime = [
+  '    /* ---- 设备边框（用户提供的 iPhone 外框；屏幕开口已抠空，几何见 src/client/assets/README.md） ---- */',
+  '    const POCKET_BEZEL_IMAGE = ' + JSON.stringify(bezelImageUrl) + ';',
+  '    const POCKET_BEZEL = ' + JSON.stringify(bezelMetrics.logical) + ';',
+  '',
+].join('\n')
+
 const bundle = [
   '/* ------------------------------------------------------------------',
   ' * Pocket H5 · DSH 面板 client bundle —— 由 build-client.mjs 生成，不要手改。',
@@ -417,6 +458,8 @@ const bundle = [
   '',
   '',
   qrRuntime,
+  '',
+  bezelRuntime,
   '    /* ---- 上游 app.js（Electron 桥替换为面板宿主适配） ---- */',
   '    function mountPocketH5(root, DEMO_URL) {',
   '      const realDocument = globalThis.document;',
@@ -470,13 +513,15 @@ const bundle = [
   '      apply: pocketApply,',
   '      version: POCKET_H5_VERSION,',
   '      // 离线冒烟测试入口（tests/client-smoke.mjs 使用；渲染不读取）。',
-  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe, bridgeBannerText: bridgeBannerText, bridgeCanTarget: bridgeCanTarget },',
+  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe, bridgeBannerText: bridgeBannerText, bridgeCanTarget: bridgeCanTarget, bezelMetrics: POCKET_BEZEL },',
   '    };',
   '  },',
   '});',
   '',
 ].join('\n')
 
+if (!bundle.includes('data:image/webp;base64,')) fail('client bundle 没有内联设备边框素材')
+if (!bundle.includes('const POCKET_BEZEL =')) fail('client bundle 没有注入边框几何')
 if (failures.length > 0) {
   console.error(`\n[build] 失败：${failures.length} 个转换/校验问题，未写出 client.js。`)
   process.exit(1)

@@ -259,7 +259,22 @@ if (typeof bridgeBannerText === 'function' && typeof bridgeCanTarget === 'functi
   check(bridgeCanTarget('') === false, 'bridge: empty target rejected')
 }
 
-/* ---- 8. generated assets are present and plausible ---- */
+/* ---- 8. device bezel geometry (user-provided iPhone frame) ---- */
+const bezel = qrTest.bezelMetrics
+check(bezel && typeof bezel === 'object', 'client exposes the device bezel geometry for smoke tests')
+if (bezel) {
+  check(bezel.portrait.screenW === 402 && bezel.portrait.screenH === 874, 'bezel: screen opening is 402x874 logical px')
+  check(Math.abs(bezel.portrait.outerW - 439.3333) < 0.01, `bezel: portrait outer width (${bezel.portrait.outerW})`)
+  check(Math.abs(bezel.portrait.outerH - 905.6667) < 0.01, `bezel: portrait outer height (${bezel.portrait.outerH})`)
+  const right = bezel.portrait.outerW - bezel.portrait.screenX - bezel.portrait.screenW
+  const bottom = bezel.portrait.outerH - bezel.portrait.screenY - bezel.portrait.screenH
+  check(Math.abs(right - 18.6666) < 0.01 && Math.abs(bottom - 15.6667) < 0.01, 'bezel: portrait side/bottom margins')
+  check(bezel.landscape.outerW === bezel.portrait.outerH && bezel.landscape.outerH === bezel.portrait.outerW, 'bezel: landscape outer box is the rotated portrait box')
+  check(bezel.landscape.screenW === 874 && bezel.landscape.screenH === 402, 'bezel: landscape screen opening is rotated')
+  check(bezel.radius > 0, 'bezel: screen corner radius is provided')
+}
+
+/* ---- 9. generated assets are present and plausible ---- */
 const source = await readFile(bundlePath, 'utf8')
 check(source.includes(':host {'), 'generated CSS carries the :host scope')
 check(source.includes('data-pocket-h5-style'), 'panel injects its own shadow-root style tag')
@@ -285,6 +300,9 @@ check(source.includes('light-dark('), 'appearance tokens use light-dark() for da
 check(source.includes('ph-topbar'), 'brand/status/actions are moved into a top bar')
 check(source.includes('grid-template-columns: 300px minmax(0, 1fr)'), 'workspace uses the sidebar + canvas card layout')
 check(source.includes('mountPanelTheme'), 'appearance layer is mounted with the panel')
+check(source.includes('data:image/webp;base64,'), 'device bezel image is inlined into the bundle')
+check(source.includes('POCKET_BEZEL.portrait'), 'device geometry is bezel-based, not a hand-drawn frame')
+check(source.includes('--p-bezel-image'), 'theme layer paints the bezel as the phone background')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

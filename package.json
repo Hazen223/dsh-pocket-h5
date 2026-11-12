@@ -27,7 +27,8 @@
     "README.md",
     "build-info.json",
     "LICENSE",
-    "tools"
+    "tools",
+    "tools/prepare-bezel.py"
   ],
   "dsh": {
     "bundle": {

@@ -25,14 +25,15 @@ dsh-pocket-h5/
 ├── src/client/qr.js      # 新增能力：地址栏二维码按钮 + 手机扫码对话框
 ├── src/client/diagnose.js # 新增能力：「诊断」按钮 + 嵌入/登录原因诊断对话框
 ├── src/client/bridge.js  # 新增能力：「登录桥」按钮 + 登录态代理对话框/状态条
-├── src/client/theme.js   # 外观层：FlowPilot 风格骨架 + light-dark() 明暗令牌
+├── src/client/theme.js   # 外观层：FlowPilot 风格骨架 + light-dark() 明暗令牌 + 设备边框背景
+├── src/client/assets/    # 设备边框素材 (bezel.webp) 与几何 (bezel.json)，见其 README
 ├── lib/bridge.js         # Host 登录桥：Safari binarycookies 解析 + 本机反向代理
 ├── ui/                   # 上游原样快照（复用源，不手改）
 ├── vendor/qrcode/        # 离线二维码编码器（node-qrcode 1.5.4 内核，MIT；PROVENANCE.md + LICENSE）
 ├── locale/{zh,en}.json   # 插件管理页显示的名称与描述
 ├── icon.svg              # 插件图标（复用上游手机图形）
 ├── tests/host-smoke.mjs  # Host 冒烟测试（30 项：demo/display/probe/bridge + 方法/HEAD/穿越边界）
-├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（82 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层）
+├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（93 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层/边框）
 ├── tests/bridge-unit.mjs # 登录桥单测（27 项：Cookie 解析/过滤/代理注入/头部改写/隧道）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
@@ -85,7 +86,7 @@ node build-client.mjs
 
 ```sh
 node tests/host-smoke.mjs     # 30 项：demo/display/probe/bridge 路由、方法、HEAD、穿越、Cookie 注入与错误边界
-node tests/client-smoke.mjs   # 82 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层
+node tests/client-smoke.mjs   # 93 项：loader/factory、槽位、二维码、显示器匹配、诊断摘要、登录桥助手、外观层、边框几何
 node tests/bridge-unit.mjs    # 27 项：Safari binarycookies、域名/路径过滤、代理注入、Set-Cookie/Location 改写、隧道
 ```
 
@@ -120,6 +121,9 @@ node build-client.mjs      # 重新生成 client.js
   加字距灰字，控件统一 34–36px 高的无描边面层，主按钮为黑/白反色（跟随主题）。底部帮助/自动保存/
   重置也单独成一张卡片。
 - **右侧画布卡**：点阵背景 + 手机预览，卡片 12px 圆角 + 1px 边界。
+- **设备外框**：用**你提供的 iPhone 外框图片**（`src/client/assets/bezel.webp`，屏幕开口已抠成透明）
+  替代原来 CSS 手绘的手机边框；屏幕开口按 402×874 @3x 的几何定位，横屏时同一张图旋转 90°。
+  换边框只需把新图交给 `python3 tools/prepare-bezel.py <frame.png>` 重新生成素材与几何。
 - **黑暗模式**：所有颜色用 `light-dark()` 成对声明（`--p-*` 令牌），跟随 DSH 的 `color-scheme`
   自动切换，不需要单独开关；在 DSH 设置里切到深色主题即可看到。设备外框/状态栏保持中性灰，
   不参与主题映射（它们是「被预览的手机」，不是面板 chrome）。

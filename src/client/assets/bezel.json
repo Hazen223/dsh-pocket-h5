@@ -1,0 +1,37 @@
+{
+  "source": "user-provided iPhone frame; screen opening (1206x2622 = 402x874 @3x) cut to transparency, outer bbox cropped",
+  "image": {
+    "width": 1318,
+    "height": 2717,
+    "screen": {
+      "x": 56,
+      "y": 48,
+      "width": 1206,
+      "height": 2622
+    },
+    "radius": 270
+  },
+  "logical": {
+    "pixelRatio": 3,
+    "ppi": 460,
+    "screenWidth": 402,
+    "screenHeight": 874,
+    "radius": 90,
+    "portrait": {
+      "outerW": 439.3333,
+      "outerH": 905.6667,
+      "screenX": 18.6667,
+      "screenY": 16.0,
+      "screenW": 402,
+      "screenH": 874
+    },
+    "landscape": {
+      "outerW": 905.6667,
+      "outerH": 439.3333,
+      "screenX": 16.0,
+      "screenY": 18.6667,
+      "screenW": 874,
+      "screenH": 402
+    }
+  }
+}
