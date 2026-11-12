@@ -24,7 +24,10 @@
     "locale/*.json",
     "icon.svg",
     "docs",
-    "README.md"
+    "README.md",
+    "build-info.json",
+    "LICENSE",
+    "tools"
   ],
   "dsh": {
     "bundle": {
@@ -61,5 +64,12 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build-client.mjs",
+    "check": "node build-client.mjs && node --check client.js && node --check index.js",
+    "test": "node tests/host-smoke.mjs && node tests/client-smoke.mjs",
+    "release:check": "node build-client.mjs && node tests/host-smoke.mjs && node tests/client-smoke.mjs",
+    "release": "node tools/release.mjs"
   }
 }

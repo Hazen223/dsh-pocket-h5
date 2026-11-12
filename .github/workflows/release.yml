@@ -1,0 +1,25 @@
+name: Release
+
+# 说明：见 ci.yml 顶部注释（私有仓库 runner 不可用）。
+# 正式发布请用本地 `npm run release -- --version=x.y.z`（tools/release.mjs）；
+# Actions 恢复后可改成 push: tags: ['v*'] 恢复自动发布。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify
+        run: npm run release:check
+      - name: Show build identity
+        run: cat build-info.json

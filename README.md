@@ -127,6 +127,22 @@ node build-client.mjs      # 重新生成 client.js
   在同尺寸的两块屏之间移动窗口可能不触发 resize 重取——可切换一次面板或改一下窗口大小来刷新。
 - macOS 之外的平台没有 CoreGraphics 探测，`100%` 仍按 96 CSS px/英寸估算，需要尺子校准一次。
 
+## 版本与发布
+
+版本号写在 `package.json`；发布走本地脚本（私有仓库没有 Actions runner 配额，tag 推送后 run 会一直 queued）：
+
+```bash
+npm run build                          # 生成 client.js + build-info.json
+npm test                               # host smoke + client smoke
+npm run release -- --version=0.2.0     # 门禁 → 升版本 → 构建 → 提交 → tag → push → Release（附产物）
+npm run release -- --version=0.2.0 --dry-run   # 只打印计划
+npm run release -- --resume=v0.2.0     # 只给已有 tag 补 Release 资产
+```
+
+- 构建身份：`client.js` 只内嵌版本号（字节级可复现）；完整身份（sha / dirty / channel / 时间）写进 `build-info.json`（已 gitignore，进 Release 资产）；
+- Release 标题只写版本号（如 `v0.2.0`），变更说明放正文；
+- 资产：`client.js` + `build-info.json`；固定版本安装用 `#v0.2.0`。
+
 ## License
 
 本仓库代码以 **MIT** 发布（见 `LICENSE`，Copyright © 2026 Hazen223）。

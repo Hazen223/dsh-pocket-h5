@@ -7,6 +7,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require("react");
     const h = React.createElement;
+    const POCKET_H5_VERSION = "0.1.0";
 
     /* ---- 上游 styles.css（shadow 作用域适配） ---- */
     const CSS = `/* ------------------------------------------------------------------
@@ -4636,6 +4637,7 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
     return {
       inject: ["slots"],
       apply: pocketApply,
+      version: POCKET_H5_VERSION,
       // 离线冒烟测试入口（tests/client-smoke.mjs 使用；渲染不读取）。
       __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe },
     };

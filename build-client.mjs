@@ -257,6 +257,31 @@ function buildApp(source) {
  * ------------------------------------------------------------------ */
 
 const pkg = JSON.parse(await read('package.json'))
+
+/* 构建身份：与 FlowPilot 相同约定——client.js 只内嵌版本号（可复现），
+ * 完整身份（sha / dirty / channel / 时间）写进 build-info.json，供 Release 资产与排障使用。 */
+function gitOutput(args) {
+  try {
+    return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return ''
+  }
+}
+
+function computeBuildInfo(version) {
+  const sha = gitOutput(['rev-parse', '--short', 'HEAD']) || 'unknown'
+  const statusLines = gitOutput(['status', '--porcelain']).split('\n').filter(Boolean)
+  const dirty = statusLines.some((line) => {
+    const file = line.slice(3).trim()
+    return file !== 'client.js' && file !== 'build-info.json'
+  })
+  const explicit = String(process.env.POCKET_H5_CHANNEL ?? '').toLowerCase()
+  const channel = ['dev', 'beta', 'release'].includes(explicit) ? explicit : dirty ? 'dev' : 'release'
+  const suffix = channel === 'dev' ? '-dev' : channel === 'beta' ? '-beta' : ''
+  return { version, label: `${version}${suffix}+${sha}${dirty ? '.dirty' : ''}`, channel, sha, dirty, builtAt: new Date().toISOString() }
+}
+
+const BUILD_INFO = computeBuildInfo(pkg.version)
 const html = await read('ui/index.html')
 const cssSource = await read('ui/styles.css')
 const appSource = await read('ui/app.js')
@@ -365,6 +390,7 @@ const bundle = [
   '  factory(require) {',
   '    const React = require("react");',
   '    const h = React.createElement;',
+  '    const POCKET_H5_VERSION = ' + JSON.stringify(pkg.version) + ';',
   '',
   '    /* ---- 上游 styles.css（shadow 作用域适配） ---- */',
   '    const CSS = ' + templateLiteral(css) + ';',
@@ -421,6 +447,7 @@ const bundle = [
   '    return {',
   '      inject: ["slots"],',
   '      apply: pocketApply,',
+  '      version: POCKET_H5_VERSION,',
   '      // 离线冒烟测试入口（tests/client-smoke.mjs 使用；渲染不读取）。',
   '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe },',
   '    };',
@@ -435,9 +462,11 @@ if (failures.length > 0) {
 }
 
 await writeFile(outPath, bundle, 'utf8')
+await writeFile(join(root, 'build-info.json'), JSON.stringify(BUILD_INFO, null, 2) + '\n', 'utf8')
 execFileSync(process.execPath, ['--check', outPath], { stdio: 'inherit' })
 ok('node --check client.js')
 
+console.log(`[build] build-info: ${BUILD_INFO.label}（channel=${BUILD_INFO.channel}, sha=${BUILD_INFO.sha}, dirty=${BUILD_INFO.dirty}）`)
 const bytes = Buffer.byteLength(bundle, 'utf8')
 console.log(
   `[build] client.js 已生成：${bytes} 字节 · 标记 ${markupIds.size} 个 id · CSS ${css.split('\n').length} 行 · app.js ${appCode.split('\n').length} 行`,

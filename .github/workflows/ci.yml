@@ -1,0 +1,20 @@
+name: CI
+
+# 说明：当前私有仓库的 GitHub-hosted runner 不可用（run 会一直 queued），
+# 所以默认只在手动触发时运行；Actions 恢复后把 push/pull_request 加回来即可。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build + verify
+        run: npm run release:check
