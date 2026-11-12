@@ -801,3 +801,12 @@ node tests/bridge-unit.mjs   # 27/27 ok
 1. ? 浮层在真实面板中的定位（贴边/下方空间不足时翻到上方）、深浅主题对比、`summary` 内点击行为；
 2. 隐藏说明后各控件是否仍然自解释（需要用户从视觉上确认是否还想保留某条说明）；
 3. 仅 client.js 变更：刷新 GUI 即可。
+
+### 18.4 同轮微调（问号位置/大小与浮层层级）
+
+- 问号从 15px → **13px**（字号 10px → 9px），紧跟在分区标题/折叠摘要文字之后（不再被推到行尾）；
+  `summary` 里的问号插在 `.summary-title` 之后，右侧徽标/箭头仍靠右。
+- 浮层改用 **Popover API**（`popover="manual"` + `showPopover()`）进入浏览器 top layer，
+  彻底避免被侧栏文字/滚动容器盖住或裁切；不支持时回退到 `position: fixed` + `hidden`。
+- 浮层左边缘对齐问号、默认显示在下方，靠近窗口底部时翻到上方；`z-index: 60`。
+- 构建：client.js 318,448 B（sha256 `6e84afe8…`）；client-smoke 103/103 通过。

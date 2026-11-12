@@ -5036,12 +5036,19 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
     .section-label {
       margin: 0 0 10px;
       padding: 0;
+      justify-content: flex-start;
       font-size: 10.5px;
       font-weight: 700;
       letter-spacing: 0.08em;
       color: var(--p-text-tertiary);
       line-height: 1.4;
     }
+    .section-label > .ph-help { margin-left: 5px; }
+    .appearance-section > summary::after { margin-left: auto; }
+    .fold > summary .summary-title { flex: 0 1 auto; }
+    .fold > summary .summary-badge { margin-left: auto; }
+    .fold > summary > .ph-help { margin-left: 5px; }
+    .fold > summary::after { margin-left: 0; }
     /* 折叠形分区（系统外观）的标题行也当分区标题用 */
     details.appearance-section > summary.section-label { margin: 0; }
     details.appearance-section[open] > summary.section-label { margin: 0 0 10px; }
@@ -5453,15 +5460,15 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
      * ================================================================== */
     .ph-help {
       flex: none;
-      width: 15px;
-      height: 15px;
-      margin-left: 6px;
+      width: 13px;
+      height: 13px;
+      margin-left: 5px;
       padding: 0;
       border: 1px solid var(--p-border-strong);
       border-radius: 50%;
       background: transparent;
       color: var(--p-text-tertiary);
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
       line-height: 1;
       display: inline-flex;
@@ -5469,7 +5476,6 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
       justify-content: center;
       cursor: help;
     }
-    .appearance-section > summary > .ph-help { margin-left: auto; }
     .ph-help:hover,
     .ph-help:focus-visible {
       color: var(--p-text);
@@ -5477,9 +5483,12 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
       background: var(--p-hover);
       outline: none;
     }
-    .ph-tip {
+    .ph-tip,
+    .ph-tip[popover] {
       position: fixed;
-      z-index: 30;
+      inset: auto;
+      margin: 0;
+      z-index: 60;
       max-width: 268px;
       padding: 8px 10px;
       border: 1px solid var(--p-border-strong);
@@ -5647,14 +5656,25 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
 
       const tip = document.createElement('div')
       tip.className = 'ph-tip'
-      tip.hidden = true
+      // Popover API：提示层进入浏览器 top layer，不会被侧栏文字/滚动容器盖住或裁切。
+      tip.setAttribute('popover', 'manual')
       tip.setAttribute('role', 'tooltip')
       root.append(tip)
+      const supportsPopover = typeof tip.showPopover === 'function'
+      if (!supportsPopover) tip.hidden = true
 
       const buttons = []
       let pinned = false
       const hideTip = function () {
-        tip.hidden = true
+        if (supportsPopover) {
+          try {
+            if (tip.matches(':popover-open')) tip.hidePopover()
+          } catch (error) {
+            /* 面板已卸载时忽略 */
+          }
+        } else {
+          tip.hidden = true
+        }
         pinned = false
       }
       const showTip = function (button) {
@@ -5673,17 +5693,24 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
           status.textContent = dynamicText
           tip.append(status)
         }
-        tip.hidden = false
-        tip.style.visibility = 'hidden'
         const rect = button.getBoundingClientRect()
+        if (supportsPopover) {
+          tip.style.visibility = 'hidden'
+          if (!tip.matches(':popover-open')) tip.showPopover()
+        } else {
+          tip.hidden = false
+          tip.style.visibility = 'hidden'
+        }
         const width = tip.offsetWidth
         const height = tip.offsetHeight
         const margin = 10
-        const left = Math.min(Math.max(rect.left - 10, margin), window.innerWidth - width - margin)
+        // 左对齐到问号，但不超出窗口；默认在下方，空间不足时翻到上方并右对齐
+        let left = Math.min(rect.left, window.innerWidth - width - margin)
+        left = Math.max(left, margin)
         let top = rect.bottom + 8
-        if (top + height > window.innerHeight - margin) top = rect.top - height - 8
+        if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 8)
         tip.style.left = left + 'px'
-        tip.style.top = Math.max(margin, top) + 'px'
+        tip.style.top = top + 'px'
         tip.style.visibility = 'visible'
       }
 
@@ -5709,7 +5736,9 @@ dialog::backdrop { background: #2d2d2d42; backdrop-filter: blur(5px); }
           pinned = true
           showTip(button)
         })
-        target.append(button)
+        const summaryTitle = target.matches('summary') ? target.querySelector('.summary-title') : null
+        if (summaryTitle) summaryTitle.insertAdjacentElement('afterend', button)
+        else target.append(button)
         buttons.push(button)
       }
       const onKeyDown = function (event) { if (event.key === 'Escape') hideTip() }
