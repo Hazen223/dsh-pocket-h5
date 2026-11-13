@@ -85,15 +85,17 @@ function copyTree(from, to, rel = '') {
       continue
     }
     if (relPath === 'tools/release.mjs' || relPath === 'tools/public-sync.mjs') continue
-    let text = ''
-    try {
-      text = readFileSync(absFrom, 'utf8')
-    } catch {
-      continue
-    }
     const target = join(to, relPath)
     mkdirSync(dirname(target), { recursive: true })
-    writeFileSync(target, sanitizeText(text), 'utf8')
+    const buffer = readFileSync(absFrom)
+    const text = buffer.toString('utf8')
+    if (Buffer.from(text, 'utf8').equals(buffer)) {
+      // 纯文本：做脱敏后写回
+      writeFileSync(target, sanitizeText(text), 'utf8')
+    } else {
+      // 二进制（webp / png / 字体等）：按原字节拷贝，绝不经过 UTF-8 解码
+      copyFileSync(absFrom, target)
+    }
   }
 }
 
@@ -146,12 +148,9 @@ function scan(dir, rel = '') {
       scan(dir, relPath)
       continue
     }
-    let text = ''
-    try {
-      text = readFileSync(abs, 'utf8')
-    } catch {
-      continue
-    }
+    const buffer = readFileSync(abs)
+    const text = buffer.toString('utf8')
+    if (!Buffer.from(text, 'utf8').equals(buffer)) continue // 二进制不参与禁词扫描
     for (const pattern of FORBIDDEN) {
       const m = pattern.exec(text)
       if (m) hits.push(`${relPath}: 命中 ${String(pattern)}（${m[0]}）`)
