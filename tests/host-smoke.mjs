@@ -173,6 +173,23 @@ if (typeof handler !== 'function') {
     if (postDisplay.status !== 405) throw new Error(`status ${String(postDisplay.status)}`)
   })
 
+  // Version check: status is served from cache/build info and never blocks on git.
+  const updateGet = await request(handler, 'GET', '/pocket-h5/update.json')
+  check('GET /pocket-h5/update.json -> 200 build status', () => {
+    if (updateGet.status !== 200) throw new Error(`status ${String(updateGet.status)}`)
+    const payload = JSON.parse(String(updateGet.body ?? '{}'))
+    if (payload.ok !== true) throw new Error('not ok')
+    if (typeof payload.currentVersion !== 'string' || payload.currentVersion === '') throw new Error('missing currentVersion')
+    if (typeof payload.build !== 'object' || payload.build === null) throw new Error('missing build info')
+    if (payload.updateAvailable !== false) throw new Error('unexpected update on a cached status')
+    if (typeof payload.autoCheck !== 'boolean') throw new Error('missing autoCheck flag')
+  })
+  const updateBadAction = await request(handler, 'POST', '/pocket-h5/update.json', JSON.stringify({ action: 'nope' }))
+  check('POST /pocket-h5/update.json invalid action -> ok:false', () => {
+    const payload = JSON.parse(String(updateBadAction.body ?? '{}'))
+    if (payload.ok !== false || payload.code !== 'INVALID_ACTION') throw new Error(`payload ${JSON.stringify(payload)}`)
+  })
+
   // Embed/login diagnosis: local fixture server for the response policies.
   const fixture = createServer((req, res) => {
     if (req.url === '/plain') {

@@ -5,7 +5,8 @@
 横竖屏、画布缩放与真机物理尺寸校准），并补了两个上游没有的入口：**手机扫码**（把当前预览地址
 生成二维码，真机扫一下就能打开）、**预览诊断**（页面打不开时，直接告诉你「站点禁止被嵌入」还是
 「被跳转到登录页」）和**登录桥**（把 Safari 里已登录的 Cookie 经本机代理注入预览，需要登录的页面
-也能在手机框里看）。界面重排为 FlowPilot 风格的工作台（顶栏 + 左侧设置卡 + 右侧画布卡），
+也能在手机框里看），以及和 FlowPilot 同语义的**版本与更新**（检查/自动检查远端发布 tag、
+打开 release 页、复制安装命令）。界面重排为 FlowPilot 风格的工作台（顶栏 + 左侧设置卡 + 右侧画布卡），
 并跟随 DSH 主题自动切换浅色/黑暗模式。
 
 - 上游来源与版本：`ui/PROVENANCE.md`（`index.html` 144 行 / `styles.css` 1000 行 / `app.js` 323 行 / `demo.html` 原样快照）
@@ -18,13 +19,14 @@
 dsh-pocket-h5/
 ├── package.json          # bundle 清单：dsh.bundle.patch + dsh.client
 ├── cordis.patch.yml      # 插入 loader 行 id=pocket-h5
-├── index.js              # Host 半：ctx.webServer 注册 /pocket-h5/demo.html 与 /pocket-h5/display.json
+├── index.js              # Host 半：ctx.webServer 注册 demo / display / probe / bridge / update 路由
 ├── client.js             # 构建产物（面板 React + 上游界面/逻辑），勿手改
 ├── build-client.mjs      # 构建器：把 ui/ 快照机械适配成 client.js
 ├── src/client/panel.js   # 面板外壳：Shadow DOM 挂载 + 槽位注册 + 侧栏图标 + Host 显示器尺寸回填
 ├── src/client/qr.js      # 新增能力：地址栏二维码按钮 + 手机扫码对话框
 ├── src/client/diagnose.js # 新增能力：「诊断」按钮 + 嵌入/登录原因诊断对话框
 ├── src/client/bridge.js  # 新增能力：「登录桥」按钮 + 登录态代理对话框/状态条
+├── src/client/update.js  # 版本与更新：侧栏版本行 + 检查/自动检查对话框
 ├── src/client/theme.js   # 外观层：FlowPilot 风格骨架 + light-dark() 明暗令牌 + 设备边框背景
 ├── src/client/assets/    # 设备边框素材 (bezel.webp) 与几何 (bezel.json)，见其 README
 ├── lib/bridge.js         # Host 登录桥：Safari binarycookies 解析 + 本机反向代理
@@ -35,6 +37,7 @@ dsh-pocket-h5/
 ├── tests/host-smoke.mjs  # Host 冒烟测试（30 项：demo/display/probe/bridge + 方法/HEAD/穿越边界）
 ├── tests/client-smoke.mjs # 客户端 bundle 冒烟测试（107 项：factory/槽位/二维码/尺寸/诊断/登录桥/外观层/边框/控件/帮助）
 ├── tests/bridge-unit.mjs # 登录桥单测（27 项：Cookie 解析/过滤/代理注入/头部改写/隧道）
+├── tests/update-unit.mjs # 版本检查单测（40 项：版本比较/tag 提取/缓存/错误/自动检查定时器）
 └── docs/                 # 复用/适配说明 + 验证记录
 ```
 
@@ -50,6 +53,10 @@ dsh-pocket-h5/
   把从 Safari 读取的该站点 Cookie 注入上游请求，iframe 改走代理 → 需要登录的页面在面板里也能打开。
   Cookie 只在 Host 内存中；停止桥接、切换面板或闲置 30 分钟后释放。读 Safari Cookie 需要
   「完全磁盘访问权限」；也支持手动粘贴 Cookie 头（不需要任何系统权限）。
+- **版本与更新（新增）**：侧栏页脚显示当前版本（点击打开「版本与更新」），握手 Host 的
+  `GET/POST /pocket-h5/update.json`。Host 在本机用 `git ls-remote --tags` 读取远端发布 tag
+  （30 分钟缓存、启动 5s 后检查一次、之后每 6 小时一次），面板据此提示可更新版本、打开发布页、
+  复制安装命令；自动检查开关存在本机，**不自动安装**（避免宿主进程改自己的安装目录）。
 - **预览诊断（新增）**：预览地址旁的「诊断」按钮。Host 半请求目标地址（只读响应头、不跟随无限跳转、
   6 秒超时），面板直接给出结论：`X-Frame-Options` / CSP `frame-ancestors` 是否禁止嵌入、是否被重定向到
   登录页（或 401/403）、服务是否根本访问不到，并给出下一步建议。
@@ -192,7 +199,18 @@ node build-client.mjs      # 重新生成 client.js
 
 ## 版本与发布
 
-版本号写在 `package.json`；发布走本地脚本（私有仓库没有 Actions runner 配额，tag 推送后 run 会一直 queued）：
+**应用内检查更新**：面板侧栏页脚显示当前版本，Host 每 6 小时用 `git ls-remote --tags --refs`
+读取远端发布 tag（30 分钟缓存；启动 5 秒后先静默检查一次），有新版本时页脚出现 `vX.Y.Z 可更新`
+徽标，点开可看当前/最新版本、构建身份（`build-info.json`）、仓库与发布页，并复制安装命令：
+
+```text
+plugin_manager install_bundle target=github:Hazen223/dsh-pocket-h5#vX.Y.Z
+```
+
+自动检查默认开启，可在「版本与更新」里关闭（偏好存在本机）；检查只读 tag，不下载文件、不自动安装。
+本地 `link:` 开发安装会标记为「本地开发版」，仍可手动检查，但更新代码后重启 DSH 即可。
+
+发布走本地脚本（私有仓库没有 Actions runner 配额，tag 推送后 run 会一直 queued）：
 
 ```bash
 npm run build                          # 生成 client.js + build-info.json

@@ -68,9 +68,9 @@
   },
   "scripts": {
     "build": "node build-client.mjs",
-    "check": "node build-client.mjs && node --check client.js && node --check index.js",
-    "test": "node tests/host-smoke.mjs && node tests/client-smoke.mjs",
-    "release:check": "node build-client.mjs && node tests/host-smoke.mjs && node tests/client-smoke.mjs",
+    "check": "node build-client.mjs && node --check client.js && node --check index.js && node --check lib/update.js && node --check lib/bridge.js",
+    "test": "node tests/host-smoke.mjs && node tests/client-smoke.mjs && node tests/bridge-unit.mjs && node tests/update-unit.mjs",
+    "release:check": "node build-client.mjs && node tests/host-smoke.mjs && node tests/client-smoke.mjs && node tests/bridge-unit.mjs && node tests/update-unit.mjs",
     "release": "node tools/release.mjs",
     "public:sync": "node tools/public-sync.mjs"
   }

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 import { createBridge, filterCookiesForUrl, readSafariCookies } from './lib/bridge.js'
+import { createUpdateService } from './lib/update.js'
 
 /** Loader row / sidebar entry id shared with the Client half. */
 export const name = 'pocket-h5'
@@ -28,6 +29,9 @@ const DEMO_PATHS = new Set([`${ROUTE_PATH}/demo.html`, `${ROUTE_PATH}/demo`])
 
 /** Host metrics endpoint: display physical size for true-size 100% preview. */
 const DISPLAY_PATH = `${ROUTE_PATH}/display.json`
+
+/** Version check endpoint: current build + latest release tag (auto checks every 6h). */
+const UPDATE_PATH = `${ROUTE_PATH}/update.json`
 
 /** Login bridge endpoint: local reverse proxy + Safari cookie import. */
 const BRIDGE_PATH = `${ROUTE_PATH}/bridge.json`
@@ -282,6 +286,9 @@ function sendPlain(res, status, message, method, extraHeaders = {}) {
 let activeBridge = null
 let bridgeIdleTimer = null
 
+/** 版本检查服务（apply 时创建并启动定时检查）。 */
+let updateService = null
+
 /** JSON 响应（桥接状态、诊断结果共用）。 */
 function sendJson(res, method, payload, status = 200) {
   const body = JSON.stringify(payload)
@@ -454,8 +461,9 @@ async function handler(req, res) {
     }
 
     const bridgePost = method === 'POST' && pathname === BRIDGE_PATH
-    if (method !== 'GET' && method !== 'HEAD' && !bridgePost) {
-      const allow = pathname === BRIDGE_PATH ? 'GET, HEAD, POST' : 'GET, HEAD'
+    const updatePost = method === 'POST' && pathname === UPDATE_PATH
+    if (method !== 'GET' && method !== 'HEAD' && !bridgePost && !updatePost) {
+      const allow = pathname === BRIDGE_PATH || pathname === UPDATE_PATH ? 'GET, HEAD, POST' : 'GET, HEAD'
       sendPlain(res, 405, 'Method Not Allowed', method, { Allow: allow })
       return
     }
@@ -495,6 +503,37 @@ async function handler(req, res) {
         result = { ok: false, code: 'invalid-action', message: '未知操作（start / refresh / stop）' }
       }
       sendJson(res, method, result)
+      return
+    }
+
+    if (pathname === UPDATE_PATH) {
+      const service = updateService
+      if (service === null) {
+        sendJson(res, method, { ok: false, code: 'UPDATE_UNAVAILABLE', message: '更新服务未初始化' })
+        return
+      }
+      if (method !== 'POST') {
+        sendJson(res, method, service.status())
+        return
+      }
+      let body
+      try {
+        body = await readJsonBody(req)
+      } catch {
+        sendPlain(res, 400, 'Bad Request', method)
+        return
+      }
+      const action = typeof body.action === 'string' ? body.action : 'status'
+      if (action === 'status') {
+        sendJson(res, method, service.status())
+        return
+      }
+      if (action === 'check') {
+        const checked = await service.check({ force: body.force === true })
+        sendJson(res, method, checked)
+        return
+      }
+      sendJson(res, method, { ok: false, code: 'INVALID_ACTION', message: '未知操作（status / check）' })
       return
     }
 
@@ -566,6 +605,18 @@ async function handler(req, res) {
  * @returns {() => void} disposer removing the route
  */
 export function apply(ctx) {
+  updateService = createUpdateService({ logger: ctx?.logger })
+  ctx.effect(() => {
+    const stop = updateService.start()
+    return () => {
+      try {
+        stop()
+      } catch {
+        /* ignore */
+      }
+      updateService = null
+    }
+  }, 'pocket-h5: update checks')
   const route = { kind: 'prefix', path: ROUTE_PATH, handler }
   ctx.effect(
     () => () => {

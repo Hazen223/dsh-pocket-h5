@@ -136,7 +136,7 @@ function PocketH5Panel() {
 
     const style = document.createElement('style')
     style.setAttribute('data-pocket-h5-style', '')
-    style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THEME_CSS
+    style.textContent = CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + UPDATE_CSS + PANEL_THEME_CSS
     const root = document.createElement('div')
     root.className = 'pocket-h5-root'
     root.innerHTML = MARKUP
@@ -147,6 +147,7 @@ function PocketH5Panel() {
     let disposeQr = null
     let disposeDiagnose = null
     let disposeBridge = null
+    let disposeUpdate = null
     let disposeDisplay = null
     try {
       dispose = mountPocketH5(shadow, pocketDemoUrl())
@@ -160,6 +161,8 @@ function PocketH5Panel() {
       disposeDiagnose = mountDiagnoseFeature(shadow)
       // 「登录桥」入口：用 Safari 已登录 Cookie 经本机代理预览。
       disposeBridge = mountBridgeFeature(shadow)
+      // 「版本与更新」：侧栏页脚版本行 + 对话框，Host 每 6h 自动检查远端 tag。
+      disposeUpdate = mountUpdateFeature(shadow)
     } catch (error) {
       console.error('[pocket-h5] 工作台初始化失败', error)
     }
@@ -183,6 +186,11 @@ function PocketH5Panel() {
         if (typeof disposeBridge === 'function') disposeBridge()
       } catch (error) {
         console.error('[pocket-h5] 登录桥清理失败', error)
+      }
+      try {
+        if (typeof disposeUpdate === 'function') disposeUpdate()
+      } catch (error) {
+        console.error('[pocket-h5] 版本面板清理失败', error)
       }
       try {
         if (typeof disposeTheme === 'function') disposeTheme()

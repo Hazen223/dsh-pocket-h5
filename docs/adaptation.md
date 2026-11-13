@@ -687,7 +687,23 @@ DSH Web GUI 左侧栏 →「Pocket H5」图标 → 主区域显示面板。首�
   `margin-left:auto` 保证整组贴着右边界；
 - 窄窗口断点：1180/1080/920px 依次收缩网址宽度，920px 以下隐藏网址只留状态与动作。
 
-### 15.7 说明文字收进 ? 提示（阶段 10 补充）
+### 15.7 版本与更新（阶段 13 新增）
+
+- **Host `lib/update.js`**（纯 node 内置，可注入 `runGit`/`now`/`auto`）：
+  `status()` 返回当前版本、`build-info.json` 构建身份、仓库、安装形态、最新 tag、是否有更新、
+  最近检查时间与上次错误；`check({force})` 用 `git ls-remote --tags --refs` 读 tag（30 分钟缓存、
+  并发去重、失败只记录错误）；`start()` 启动 5s 后检查一次、之后每 6 小时一次（timer.unref）。
+  `devBuild` 通过 link 安装 / `POCKET_H5_CHANNEL=dev|beta|local` / build-info dirty 识别。
+- **路由**：`GET /pocket-h5/update.json` 返回缓存状态；`POST {action:'status'|'check'}`，
+  check 支持 `force`。不提供自动安装：面板只复制 `plugin_manager install_bundle ...#tag` 命令，
+  避免宿主进程改自己的安装目录。
+- **Client `src/client/update.js`**：侧栏页脚版本行（可更新时出现徽标）+「版本与更新」对话框
+  （当前/最新/检查时间/仓库/错误/发布页/安装命令/自动检查开关）；自动检查开启且检查结果过期
+  （>6h）时面板打开补检一次，之后每 6h 检查；偏好存 `localStorage('pocket-h5-update-v1')`。
+- **与发布脚本的关系**：`tools/release.mjs` 负责升版本/打 tag/Release；`tools/public-sync.mjs`
+  负责脱敏镜像；本面板只消费 tag，不参与发布流程。
+
+### 15.8 说明文字收进 ? 提示（阶段 10 补充）
 
 原则：*Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.*
 

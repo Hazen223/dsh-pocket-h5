@@ -274,7 +274,33 @@ if (bezel) {
   check(bezel.radius > 0, 'bezel: screen corner radius is provided')
 }
 
-/* ---- 9. generated assets are present and plausible ---- */
+/* ---- 9. version & update helpers ---- */
+const updateVersionLabel = qrTest.updateVersionLabel
+const updateBadgeLabel = qrTest.updateBadgeLabel
+const updateBuildText = qrTest.updateBuildText
+const updateInstallCommand = qrTest.updateInstallCommand
+const updateNeedsCheck = qrTest.updateNeedsCheck
+check(typeof updateVersionLabel === 'function' && typeof updateBadgeLabel === 'function', 'client exposes update helpers')
+if (typeof updateVersionLabel === 'function') {
+  check(updateVersionLabel({ currentVersion: '1.2.3' }) === 'v1.2.3', 'update: version label')
+  check(updateVersionLabel(null) === '—', 'update: missing status label')
+  check(updateBadgeLabel({ updateAvailable: true, latestVersion: '1.3.0' }) === 'v1.3.0 可更新', 'update: badge label')
+  check(updateBadgeLabel({ updateAvailable: false }) === '', 'update: no badge without a newer version')
+  check(updateBuildText({ currentVersion: '1.2.3', buildLabel: '1.2.3+abc', build: { channel: 'release' } }) === '1.2.3+abc · release', 'update: build label')
+  const command = updateInstallCommand({
+    updateAvailable: true,
+    latestVersion: '1.3.0',
+    latestTag: 'v1.3.0',
+    repoWebUrl: 'https://github.com/example/pocket-h5',
+  })
+  check(command === 'plugin_manager install_bundle target=github:example/pocket-h5#v1.3.0', 'update: install command')
+  check(updateInstallCommand({ updateAvailable: false }) === '', 'update: no command when up to date')
+  check(updateNeedsCheck(null, Date.now(), 1000) === true, 'update: never checked needs a check')
+  check(updateNeedsCheck({ checkedAt: new Date().toISOString() }, Date.now(), 3600000) === false, 'update: fresh check is reused')
+  check(updateNeedsCheck({ checkedAt: new Date(Date.now() - 7200000).toISOString() }, Date.now(), 3600000) === true, 'update: stale check triggers')
+}
+
+/* ---- 10. generated assets are present and plausible ---- */
 const source = await readFile(bundlePath, 'utf8')
 check(source.includes(':host {'), 'generated CSS carries the :host scope')
 check(source.includes('data-pocket-h5-style'), 'panel injects its own shadow-root style tag')
@@ -320,6 +346,10 @@ check(source.includes('SF Pro Text'), 'status bar text uses the SF Pro system fo
 check(source.includes('ph-right'), 'top bar groups URL + actions on the right edge')
 check(source.includes('flex-direction: row !important'), 'brand mark and name stay on one row')
 check(source.includes('.ph-brand .brand-sub'), 'the redundant H5 preview pill is hidden')
+check(source.includes('/pocket-h5/update.json'), 'version check API is bundled')
+check(source.includes('mountUpdateFeature'), 'version & update panel is mounted')
+check(source.includes('ph-version-row'), 'sidebar footer carries the version row')
+check(source.includes('自动检查更新'), 'auto check setting is exposed')
 
 if (failures.length > 0) {
   console.error(`\n${failures.length} client smoke check(s) failed`)

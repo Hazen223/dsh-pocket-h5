@@ -881,3 +881,47 @@ node tests/host-smoke.mjs    # 30/30 ok
 node tests/client-smoke.mjs  # 110/110 ok（新增右组/品牌同行/副标签隐藏断言）
 node tests/bridge-unit.mjs   # 27/27 ok
 ```
+
+---
+
+## 21. 阶段 13（版本管理：检查更新 + 自动检查）
+
+> 触发：用户要求「和 FlowPilot 一样的版本管理、检查更新、自动检查更新」。
+
+### 21.1 实现
+
+- `lib/update.js`：版本解析/比较、tag 提取、build-info 读取、安装形态与 devBuild 识别、
+  更新服务（30 分钟缓存、并发去重、错误码、自动检查 5s 启动 + 6h 间隔、dispose）。
+- `index.js`：`GET/POST /pocket-h5/update.json`（status/check(force)），POST 与 bridge 路由一起放行；
+  apply 时创建服务并注册定时检查，dispose 时停止。
+- `src/client/update.js`：侧栏页脚版本行 + 徽标 + 对话框（当前/最新/检查时间/仓库/错误/发布页/
+  安装命令/自动检查开关），自动检查偏好存本机；>6h 过期时打开面板补检。
+- 发布链路不变：`tools/release.mjs` 升版本打 tag，`public-sync.mjs` 同步镜像；面板只读 tag、
+  显示安装命令，不自动安装。
+
+### 21.2 验证
+
+```text
+node build-client.mjs        # 幂等；client.js   342053 B（sha256 85ab5318…）
+node --check client.js && node --check index.js && node --check lib/update.js
+node tests/host-smoke.mjs    # 32/32 ok（新增 update 路由状态/非法 action）
+node tests/client-smoke.mjs  # 125/125 ok（新增版本/更新助手与产物断言）
+node tests/bridge-unit.mjs   # 27/27 ok
+node tests/update-unit.mjs   # 40/40 ok（版本比较/tag/缓存/错误/自动检查定时器）
+```
+
+真实检查（本机，注入真实 git，非 mock）：
+
+```text
+POST /pocket-h5/update.json {action:'check', force:true}
+→ 200，约 2.5s；latestVersion=0.3.0，latestTag=v0.3.0，updateAvailable=false（当前 0.3.0）
+第二次不带 force：命中缓存，0ms 返回
+```
+
+### 21.3 未验证项（阶段 13）
+
+1. 「版本与更新」对话框/页脚徽标在真实面板里的渲染与交互（无浏览器控制）；
+2. 有更新时（需要更高版本 tag）的徽标 + 发布页/复制安装命令端到端流程；
+3. 自动检查在宿主进程长时间运行时的定时行为（单测已覆盖 start/stop 与间隔，真实 6h 未等待）；
+4. 重启/刷新后 `build-info.json` 与 package.json 版本一致性（发布流程会重写 build-info）；
+5. Host 变更：需重启 DSH 才会加载 `/pocket-h5/update.json`；client 变更刷新即可。

@@ -344,6 +344,7 @@ const panelSource = await read('src/client/panel.js')
 const qrSource = await read('src/client/qr.js')
 const diagnoseSource = await read('src/client/diagnose.js')
 const bridgeSource = await read('src/client/bridge.js')
+const updateSource = await read('src/client/update.js')
 const themeSource = await read('src/client/theme.js')
 
 /* 设备边框素材：用户提供的 iPhone 外框（屏幕开口已抠空），几何见 assets/README.md */
@@ -382,7 +383,10 @@ if (!qrSource.includes('function mountQrFeature')) fail('qr.js 缺少 mountQrFea
 if (!qrSource.includes('createQrMatrix')) fail('qr.js 没有使用打包的二维码内核')
 if (!panelSource.includes('applyHostDisplayMetrics')) fail('面板片段没有接 Host 的显示器物理尺寸')
 if (!panelSource.includes('mountDiagnoseFeature(shadow)')) fail('面板片段没有挂载诊断入口')
-if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + PANEL_THEME_CSS')) fail('面板片段没有注入外观层样式')
+if (!panelSource.includes('CSS + QR_CSS + DIAGNOSIS_CSS + BRIDGE_CSS + UPDATE_CSS + PANEL_THEME_CSS')) fail('面板片段没有注入版本面板样式')
+if (!panelSource.includes('mountUpdateFeature(shadow)')) fail('面板片段没有挂载版本与更新')
+if (!updateSource.includes('function mountUpdateFeature')) fail('update.js 缺少 mountUpdateFeature')
+if (!updateSource.includes('function updateBadgeLabel')) fail('update.js 缺少 updateBadgeLabel')
 if (!panelSource.includes('mountPanelTheme(shadow)')) fail('面板片段没有挂载外观层')
 if (!themeSource.includes('function mountPanelTheme')) fail('theme.js 缺少 mountPanelTheme')
 if (!themeSource.includes('light-dark(')) fail('theme.js 没有 light-dark() 黑暗模式配色')
@@ -541,6 +545,8 @@ const bundle = [
   '',
   indent(bridgeSource, 4),
   '',
+  indent(updateSource, 4),
+  '',
   indent(themeSource, 4),
   '',
   indent(panelSource, 4),
@@ -550,7 +556,7 @@ const bundle = [
   '      apply: pocketApply,',
   '      version: POCKET_H5_VERSION,',
   '      // 离线冒烟测试入口（tests/client-smoke.mjs 使用；渲染不读取）。',
-  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe, bridgeBannerText: bridgeBannerText, bridgeCanTarget: bridgeCanTarget, bezelMetrics: POCKET_BEZEL },',
+  '      __test: { createQrMatrix: createQrMatrix, qrSvgMarkup: qrSvgMarkup, pickHostDisplay: pickHostDisplay, hostCssPixelsPerInch: hostCssPixelsPerInch, summarizeProbe: summarizeProbe, bridgeBannerText: bridgeBannerText, bridgeCanTarget: bridgeCanTarget, bezelMetrics: POCKET_BEZEL, updateVersionLabel: updateVersionLabel, updateBadgeLabel: updateBadgeLabel, updateBuildText: updateBuildText, updateInstallCommand: updateInstallCommand, updateNeedsCheck: updateNeedsCheck },',
   '    };',
   '  },',
   '});',
